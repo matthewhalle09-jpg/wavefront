@@ -49,8 +49,7 @@
   #main{width:100%;display:flex;gap:10px;align-items:flex-start;justify-content:center;min-height:0;}
   #stageWrap{position:relative;border-radius:16px;overflow:hidden;border:1px solid var(--line);box-shadow:0 22px 70px rgba(0,0,0,.65);flex:1 1 auto;max-width:1024px;}
   canvas{display:block;width:100%;height:auto;background:#05080f;touch-action:none;}
-  #placeBar{position:absolute;bottom:12px;left:50%;transform:translateX(-50%);display:flex;gap:10px;z-index:25;}
-  #placeBar .btn{font-size:14px;padding:11px 18px;box-shadow:0 6px 24px rgba(0,0,0,.5);}
+  .abil.sel{outline:2px solid var(--cyan);}
 
   /* ---------- Side ---------- */
   #side{width:316px;flex:0 0 316px;display:flex;flex-direction:column;gap:8px;}
@@ -201,10 +200,22 @@
     #side .abil .an{font-size:7px;letter-spacing:0;}
     #side .abil .ac{font-size:8px;}
     #side .abil .cdt{font-size:13px;}
-    /* selected tower panel floats over the battlefield */
-    #selCard{position:absolute;left:8px;top:8px;bottom:8px;width:216px;overflow-y:auto;z-index:20;background:rgba(12,16,30,.95);box-shadow:0 14px 44px rgba(0,0,0,.6);}
-    #selCard .stats{font-size:11px;gap:2px 8px;}
-    #selCard .head .tn{font-size:13px;}
+    /* info panel sits in the side column below abilities — never covers the map */
+    #selCard{padding:6px 5px;}
+    #selCard .head{gap:6px;margin-bottom:4px;}
+    #selCard .head .chip{width:30px !important;height:30px !important;flex-basis:30px !important;}
+    #selCard .head .chip svg{width:20px !important;height:20px !important;}
+    #selCard .head .tn{font-size:11px;line-height:1.1;}
+    #selCard .head .tier{font-size:8px;letter-spacing:.8px;}
+    #selCard .lvlbar{margin:4px 0;}
+    #selCard .pip{height:4px;}
+    #selCard .stats{font-size:9.5px;gap:1px 6px;margin:4px 0;}
+    #selCard .stats .up{font-size:8px;}
+    #selCard .modes{gap:3px;margin:5px 0 3px;}
+    #selCard .modes button{font-size:8.5px;padding:4px 1px;}
+    #selCard .modeHint{font-size:8.5px;margin:0 0 4px;}
+    #selCard .bpHow{font-size:9px;padding-top:4px;line-height:1.4;}
+    #selCard .selActs .btn{font-size:10.5px;padding:6px 4px;}
     /* start menu fits without scroll */
     .menu{padding:10px 8px 14px;}
     .logo{font-size:32px;}
@@ -245,12 +256,7 @@
   </div>
 
   <div id="main">
-    <div id="stageWrap"><canvas id="cv"></canvas>
-      <div id="placeBar" style="display:none;">
-        <button id="placeOk" class="btn go"></button>
-        <button id="placeNo" class="btn sell">✕</button>
-      </div>
-    </div>
+    <div id="stageWrap"><canvas id="cv"></canvas></div>
     <div id="side">
       <div class="card"><h3><span>Build Towers</span><span id="shopHint">tap → place</span></h3><div id="shop"></div></div>
       <div class="card" id="selCard" style="display:none;"></div>
@@ -446,9 +452,9 @@ const KINDS={
 
 /* ---------- ABILITIES / DIFFICULTY ---------- */
 const ABILITIES=[
- {key:'strike',name:'Airstrike',icon:'ab_strike',cost:130,cd:22,aim:true,desc:'Targeted blast + burn'},
- {key:'freeze',name:'Cryo Nuke',icon:'ab_freeze',cost:110,cd:30,desc:'Freeze everything 2.5s'},
- {key:'rally', name:'War Rally',icon:'ab_rally', cost:95, cd:26,desc:'+70% fire rate for 6s'},
+ {key:'strike',name:'Airstrike',icon:'ab_strike',cost:130,cd:22,aim:true,desc:'Targeted blast + burn',info:'Calls a precision strike on a target circle: massive true damage plus a 3-second burn. You aim it by tapping the battlefield.'},
+ {key:'freeze',name:'Cryo Nuke',icon:'ab_freeze',cost:110,cd:30,desc:'Freeze everything 2.5s',info:'Flash-freezes EVERY enemy on the field solid for 2.5 seconds, then leaves them slowed. Panic button for leaks and boss pushes.'},
+ {key:'rally', name:'War Rally',icon:'ab_rally', cost:95, cd:26,desc:'+70% fire rate for 6s',info:'All towers fire 70% faster for 6 seconds. Strongest when your board is fully built and a boss is in range.'},
 ];
 const DIFF=[{k:'normal',n:'Recruit',hp:0.9, spd:0.92,gold:340,lives:25,sub:'Forgiving start'},
             {k:'hard',  n:'Veteran',hp:1.12,spd:1.0, gold:280,lives:18,sub:'The real game'},
@@ -465,7 +471,7 @@ function buildable(c,r){return c>=0&&c<COLS&&r>=0&&r<ROWS&&!pathCells.has(c+','+
 let G,diffIdx=1,enemySeq=0;
 function freshState(){return{theme:0,diff:DIFF[diffIdx],gold:DIFF[diffIdx].gold,lives:DIFF[diffIdx].lives,wave:0,score:0,kills:0,
  towers:[],enemies:[],projs:[],parts:[],floats:[],bolts:[],rings:[],spawnQueue:[],spawnTimer:0,wScale:{hp:1,spd:1,rw:1},
- waveActive:false,running:false,over:false,paused:false,selectedShop:-1,selectedTower:null,hoverCell:null,
+ waveActive:false,running:false,over:false,paused:false,selectedShop:-1,selectedTower:null,infoAbility:null,hoverCell:null,
  speed:1,muted:false,time:0,shake:0,banner:null,bannerT:0,bannerColor:'#fff',rallyUntil:0,aiming:null,abilReady:{strike:0,freeze:0,rally:0}};}
 function theme(){return THEMES[G.theme];}
 
@@ -971,7 +977,7 @@ function buildShop(){
   const p=th.towers[i].p;
   const b=document.createElement('button');b.className='shopBtn';
   b.innerHTML=`<div class="top"><span class="chip" style="background:${rgba(p,0.13)};border:1px solid ${rgba(p,0.35)}">${svgIcon(th.id+'_'+tw.key,p,24,'filter:drop-shadow(0 0 4px '+rgba(p,0.7)+')')}</span><span class="nm">${th.towers[i].n}</span></div><div class="ds">${tw.desc}</div><div class="cost">${coinSVG()} ${tw.cost}</div>`;
-  b.onclick=()=>{const was=G.selectedShop;G.selectedShop=was===i?-1:i;G.selectedTower=null;G.aiming=null;if(G.selectedShop<0)clearPending();else updatePlaceBar();renderSel();refreshHUD();};
+  b.onclick=()=>{G.selectedShop=G.selectedShop===i?-1:i;G.selectedTower=null;G.aiming=null;G.infoAbility=null;if(G.selectedShop<0)clearPending();renderSel();refreshHUD();};
   shop.appendChild(b);
  });
 }
@@ -991,6 +997,7 @@ const TRAIT_INFO={
 function renderSel(){
  const card=$('selCard');
  if(!G.selectedTower&&G.selectedShop>=0){renderBlueprint(card);return;}
+ if(!G.selectedTower&&G.infoAbility!=null){renderAbilityInfo(card);return;}
  if(!G.selectedTower){card.style.display='none';return;}
  const t=G.selectedTower,s=towerStat(t),th=theme(),maxed=t.level>=MAX_LVL;
  const ns=maxed?s:towerStat(t,t.level+1),uc=upgradeCost(t),refund=Math.round(totalInvested(t)*0.6),tier=tierOf(t.level);
@@ -1026,8 +1033,16 @@ function renderSel(){
    <button class="btn sell" id="sellBtn">Sell +${refund}</button>
   </div>`;
  card.querySelectorAll('.modes button').forEach(b=>b.onclick=()=>{t.mode=b.dataset.m;renderSel();});
- $('upBtn').onclick=()=>{if(t.level>=MAX_LVL||G.gold<uc)return;G.gold-=uc;t.level++;addFloat(t.x,t.y,TIER_NAMES[t.level-1].toUpperCase()+' '+t.level,'#ffcf4d',15);burst(t.x,t.y,p,12);ring(t.x,t.y,34,p);sCoin();renderSel();refreshHUD();saveGame();};
+ $('upBtn').onclick=()=>tryUpgrade(t);
  $('sellBtn').onclick=()=>{G.gold+=refund;const idx=G.towers.indexOf(t);if(idx>=0)G.towers.splice(idx,1);G.selectedTower=null;addFloat(t.x,t.y,'+'+refund,'#ffcf4d',16);sCoin();renderSel();refreshHUD();saveGame();};
+}
+function tryUpgrade(t){
+ if(t.level>=MAX_LVL){toast('Already max level');return false;}
+ const uc=upgradeCost(t),p=theme().towers[t.type].p;
+ if(G.gold<uc){toast('Upgrade needs '+uc+' gold');return false;}
+ G.gold-=uc;t.level++;
+ addFloat(t.x,t.y,TIER_NAMES[t.level-1].toUpperCase()+' '+t.level,'#ffcf4d',15);
+ burst(t.x,t.y,p,12);ring(t.x,t.y,34,p);sCoin();renderSel();refreshHUD();saveGame();return true;
 }
 function renderBlueprint(card){
  const i=G.selectedShop,T=TOWERS[i],th=theme(),p=th.towers[i].p;
@@ -1051,14 +1066,35 @@ function renderBlueprint(card){
    <div class="row"><span>Max level</span><b>${MAX_LVL}</b></div>
   </div>
   <div class="bpHow">${TRAIT_INFO[T.trait]}</div>
-  <div class="bpHow" style="color:var(--good);border:none;margin-top:2px;">${G.gold>=T.cost?'Tap any open tile on the battlefield to build it.':'Not enough gold yet — earn '+(T.cost-Math.floor(G.gold))+' more.'}</div>`;
+  <div class="bpHow" style="color:var(--good);border:none;margin-top:2px;">${G.gold>=T.cost?(IS_TOUCH?'Tap the field to preview & drag to position — double-tap to build.':'Click any open tile on the battlefield to build it.'):'Not enough gold yet — earn '+(T.cost-Math.floor(G.gold))+' more.'}</div>`;
+}
+function renderAbilityInfo(card){
+ const A=ABILITIES[G.infoAbility];if(!A){card.style.display='none';return;}
+ card.style.display='block';
+ card.innerHTML=`
+  <div class="head"><span class="chip" style="width:44px;height:44px;flex-basis:44px;background:rgba(57,230,255,0.10);border:1px solid rgba(57,230,255,0.35)">${svgIcon(A.icon,'#9fd4ff',30,'filter:drop-shadow(0 0 5px rgba(57,230,255,0.6))')}</span>
+   <div><div class="tn">${A.name}</div><div class="tier" style="color:var(--cyan)">Tactical ability</div></div></div>
+  <div class="stats">
+   <div class="row"><span>Cost</span><b style="color:var(--accent)">${A.cost}</b></div>
+   <div class="row"><span>Cooldown</span><b>${A.cd}s</b></div>
+  </div>
+  <div class="bpHow">${A.info}</div>
+  <div class="bpHow" style="color:var(--good);border:none;margin-top:2px;">${IS_TOUCH?('Double-tap the '+A.name+' button to '+(A.aim?'arm it, then tap the battlefield to strike.':'unleash it.')):'Click the button to use it.'}</div>`;
 }
 function buildAbilities(){
  const bar=$('abilities');bar.innerHTML='';
  ABILITIES.forEach((A,i)=>{
   const d=document.createElement('div');d.className='abil';d.id='ab'+i;
   d.innerHTML=`${svgIcon(A.icon,'#9fd4ff',30,'filter:drop-shadow(0 0 5px rgba(57,230,255,0.6))')}<div class="an">${A.name}</div><div class="ac">${coinSVG(10)} ${A.cost}</div><div class="cd"></div><div class="cdt"></div>`;
-  d.title=A.desc;d.onclick=()=>useAbility(i);bar.appendChild(d);
+  d.title=A.desc;
+  d.onclick=()=>{
+   ac();
+   if(!IS_TOUCH){useAbility(i);return;}
+   const now=performance.now();
+   if(G.infoAbility===i&&now-(buildAbilities._t||0)<450){buildAbilities._t=0;useAbility(i);}
+   else{buildAbilities._t=now;G.infoAbility=i;G.selectedShop=-1;G.selectedTower=null;clearPending();renderSel();refreshHUD();}
+  };
+  bar.appendChild(d);
  });
 }
 function refreshAbilities(){
@@ -1068,6 +1104,7 @@ function refreshAbilities(){
   el.classList.toggle('ready',ready&&!G.aiming);el.classList.toggle('cant',!ready);
   el.querySelector('.cd').style.setProperty('--p',(rem/A.cd*360)+'deg');
   el.querySelector('.cdt').textContent=rem>0?Math.ceil(rem):'';
+  el.classList.toggle('sel',G.infoAbility===i);
   el.style.outline=G.aiming===A.key?'2px solid #ff8a3c':'';
  });
 }
@@ -1118,29 +1155,28 @@ function placeTower(c,r){
  if(G.gold<TOWERS[G.selectedShop].cost){G.selectedShop=-1;renderSel();}
  refreshHUD();saveGame();return true;
 }
-function updatePlaceBar(){
- const bar=$('placeBar');
- if(G.selectedShop<0||!G.pendingCell){bar.style.display='none';return;}
- bar.style.display='flex';
- const ok=buildable(G.pendingCell.c,G.pendingCell.r)&&G.gold>=TOWERS[G.selectedShop].cost;
- $('placeOk').className='btn go'+(ok?'':' disabled');
- $('placeOk').innerHTML='✓ PLACE — '+TOWERS[G.selectedShop].cost;
+function updatePlaceBar(){} /* gesture flow: double-tap places */
+function clearPending(){G.pendingCell=null;}
+let lastTap={t:0,x:0,y:0,kind:'',target:null},lastHintAt=0;
+function isDouble(p,kind,target){
+ const now=performance.now();
+ const ok=(now-lastTap.t<420)&&Math.hypot(p.x-lastTap.x,p.y-lastTap.y)<52&&lastTap.kind===kind&&lastTap.target===target;
+ lastTap={t:now,x:p.x,y:p.y,kind,target:(target===undefined?null:target)};
+ return ok;
 }
-$('placeOk').onclick=()=>{if(!G.pendingCell)return;if(placeTower(G.pendingCell.c,G.pendingCell.r)){G.pendingCell=null;updatePlaceBar();}};
-$('placeNo').onclick=()=>{G.pendingCell=null;updatePlaceBar();};
-function clearPending(){G.pendingCell=null;updatePlaceBar();}
+function placeHint(){const now=performance.now();if(now-lastHintAt>7000){lastHintAt=now;toast('Drag to position · double-tap to build');}}
 
 cv.addEventListener('mousemove',ev=>{const p=canvasPoint(ev.clientX,ev.clientY);G.hoverCell={c:p.c,r:p.r};});
 cv.addEventListener('mouseleave',()=>G.hoverCell=null);
 cv.addEventListener('touchstart',ev=>{
  const t=ev.touches[0],p=canvasPoint(t.clientX,t.clientY);
  G.hoverCell={c:p.c,r:p.r};
- if(G.selectedShop>=0&&!G.paused){G.pendingCell={c:p.c,r:p.r};updatePlaceBar();}
+ if(G.selectedShop>=0&&!G.paused&&!G.pendingCell)G.pendingCell={c:p.c,r:p.r};
 },{passive:true});
 cv.addEventListener('touchmove',ev=>{
  const t=ev.touches[0],p=canvasPoint(t.clientX,t.clientY);
  G.hoverCell={c:p.c,r:p.r};
- if(G.selectedShop>=0&&G.pendingCell){G.pendingCell={c:p.c,r:p.r};updatePlaceBar();ev.preventDefault();}
+ if(G.selectedShop>=0&&G.pendingCell){G.pendingCell={c:p.c,r:p.r};ev.preventDefault();}
 },{passive:false});
 cv.addEventListener('click',ev=>{
  ac();
@@ -1148,20 +1184,26 @@ cv.addEventListener('click',ev=>{
  const p=canvasPoint(ev.clientX,ev.clientY);
  if(G.aiming){const idx=ABILITIES.findIndex(a=>a.key===G.aiming);commitAbility(idx,p.x,p.y);G.aiming=null;return;}
  if(G.selectedShop>=0){
-  if(IS_TOUCH){G.pendingCell={c:p.c,r:p.r};updatePlaceBar();} // drag & confirm on touch
-  else placeTower(p.c,p.r);                                    // instant on mouse
+  if(IS_TOUCH){ // tap = preview ghost (draggable); double-tap same spot = build
+   const dbl=isDouble(p,'place',G.selectedShop);
+   G.pendingCell={c:p.c,r:p.r};
+   if(dbl){if(placeTower(p.c,p.r))G.pendingCell=null;}
+   else placeHint();
+  } else placeTower(p.c,p.r); // instant on mouse
   return;
  }
  let hit=null,hd=IS_TOUCH?46:30;
  for(const t of G.towers){const d=dist(t.x,t.y,p.x,p.y);if(d<hd){hd=d;hit=t;}}
- G.selectedTower=hit;renderSel();
+ if(hit&&isDouble(p,'tower',hit)){G.selectedTower=hit;G.infoAbility=null;renderSel();tryUpgrade(hit);return;}
+ if(!hit)isDouble(p,'bg',null); // reset chain
+ G.selectedTower=hit;if(hit)G.infoAbility=null;renderSel();
 });
 
 /* ---------- compact landscape: abilities live in the side column ---------- */
 const compactMQ=matchMedia('(orientation:landscape) and (max-height:580px)');
 function layoutMode(){
  const abil=$('abilities');
- if(compactMQ.matches)$('side').appendChild(abil);
+ if(compactMQ.matches)$('side').insertBefore(abil,$('selCard'));
  else $('bottom').insertBefore(abil,$('nextWave'));
 }
 try{compactMQ.addEventListener('change',layoutMode);}catch(e){compactMQ.addListener(layoutMode);}
@@ -1210,7 +1252,7 @@ $('menuBtn').onclick=()=>{if(G.running&&!G.over)setPaused(true);openStart();};
 $('themeSel').onchange=e=>{G.theme=+e.target.value;onThemeChange();toast('Universe: '+theme().name);saveGame();};
 function onThemeChange(){buildBackground();initAmb();buildShop();renderSel();buildNextWavePreview();refreshHUD();updatePlaceBar();}
 window.addEventListener('keydown',e=>{
- if(e.key==='Escape'){G.selectedShop=-1;G.selectedTower=null;G.aiming=null;clearPending();renderSel();refreshHUD();}
+ if(e.key==='Escape'){G.selectedShop=-1;G.selectedTower=null;G.aiming=null;G.infoAbility=null;clearPending();renderSel();refreshHUD();}
  if(e.key===' '){e.preventDefault();if(!G.waveActive){if(G.paused)setPaused(false);startWave();}}
  if(e.key.toLowerCase()==='p')setPaused(!G.paused);
  if(e.key>='1'&&e.key<='6'){const i=+e.key-1;G.selectedShop=G.selectedShop===i?-1:i;G.selectedTower=null;G.aiming=null;clearPending();renderSel();refreshHUD();}
