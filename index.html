@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="theme-color" content="#060912">
 <title>WAVEFRONT — Tactical Tower Defense</title>
@@ -134,7 +134,7 @@
   #toast{position:fixed;top:70px;left:50%;transform:translateX(-50%);background:rgba(0,0,0,.82);border:1px solid var(--line);padding:9px 18px;border-radius:11px;font-weight:700;z-index:60;opacity:0;transition:.3s;pointer-events:none;font-size:13px;}
   #toast.show{opacity:1;}
 
-  /* ---------- Mobile ---------- */
+  /* ---------- Mobile portrait (stacked) ---------- */
   @media(max-width:1100px){
     body{overflow:auto;}
     #main{flex-direction:column;align-items:stretch;}
@@ -148,6 +148,75 @@
     #shop{grid-template-columns:repeat(2,1fr);}
     .abil{width:31%;}
   }
+
+  /* ---------- Rotate hint (portrait phones) ---------- */
+  #rotateHint{position:fixed;inset:0;z-index:90;display:none;flex-direction:column;align-items:center;justify-content:center;gap:16px;background:rgba(4,6,13,.97);text-align:center;}
+  #rotateHint .ph{width:44px;height:78px;border:3px solid #9fd4ff;border-radius:11px;box-shadow:0 0 18px rgba(57,230,255,.4);animation:rotPh 1.7s ease-in-out infinite alternate;}
+  @keyframes rotPh{0%,28%{transform:rotate(0deg);}72%,100%{transform:rotate(-90deg);}}
+  #rotateHint .rt{font-weight:800;font-size:17px;letter-spacing:2px;}
+  #rotateHint .rs{opacity:.55;font-size:12px;}
+  @media (pointer:coarse) and (orientation:portrait) and (max-width:740px){
+    #rotateHint:not(.off){display:flex;}
+  }
+  #rotateHint.force{display:flex !important;}
+
+  /* ---------- Compact landscape (phones sideways): everything fits one screen ---------- */
+  @media (orientation:landscape) and (max-height:580px){
+    body{overflow:hidden;}
+    #app{height:100vh;height:100dvh;padding:4px 6px;gap:4px;justify-content:flex-start;
+      padding-left:max(6px,env(safe-area-inset-left));padding-right:max(6px,env(safe-area-inset-right));}
+    #hud{padding:3px 8px;border-radius:10px;gap:4px;flex-wrap:nowrap;}
+    .stat{padding:0 4px;gap:5px;}
+    .stat .v{font-size:14px;}
+    .stat svg{width:15px !important;height:15px !important;}
+    .stat.score,.stat.kills{display:none;}
+    #themeSel{padding:5px 6px;font-size:11px;max-width:118px;}
+    .btn{padding:6px 9px;font-size:11px;border-radius:8px;gap:4px;}
+    #main{flex-direction:row;gap:6px;flex:1 1 auto;min-height:0;align-items:stretch;justify-content:center;position:relative;}
+    #stageWrap{border-radius:10px;flex:0 1 auto;display:flex;align-items:center;justify-content:center;background:#05080f;}
+    canvas{width:auto;height:auto;max-height:calc(100vh - 56px);max-height:calc(100dvh - 56px);max-width:calc(100vw - 172px);}
+    #side{width:150px;flex:0 0 150px;gap:5px;overflow-y:auto;min-height:0;}
+    .card{padding:7px 6px;border-radius:10px;}
+    .card h3{margin-bottom:5px;font-size:8.5px;letter-spacing:1px;}
+    #shopHint{display:none;}
+    #shop{grid-template-columns:1fr 1fr;gap:5px;}
+    .shopBtn{padding:5px 3px 4px;align-items:center;gap:1px;}
+    .shopBtn .nm,.shopBtn .ds{display:none;}
+    .shopBtn .top{justify-content:center;width:100%;}
+    .shopBtn .chip{flex-basis:32px;width:32px;height:32px;}
+    .shopBtn .cost{margin:1px auto 0;font-size:10px;}
+    #tipCard{display:none;}
+    #bottom{display:none;}
+    #side #abilities{display:flex;gap:5px;width:100%;}
+    #side .abil{width:auto;flex:1;padding:5px 1px 4px;border-radius:9px;}
+    #side .abil svg{width:19px !important;height:19px !important;}
+    #side .abil .an{font-size:7px;letter-spacing:0;}
+    #side .abil .ac{font-size:8px;}
+    #side .abil .cdt{font-size:13px;}
+    /* selected tower panel floats over the battlefield */
+    #selCard{position:absolute;left:8px;top:8px;bottom:8px;width:216px;overflow-y:auto;z-index:20;background:rgba(12,16,30,.95);box-shadow:0 14px 44px rgba(0,0,0,.6);}
+    #selCard .stats{font-size:11px;gap:2px 8px;}
+    #selCard .head .tn{font-size:13px;}
+    /* start menu fits without scroll */
+    .menu{padding:10px 8px 14px;}
+    .logo{font-size:32px;}
+    .tag{font-size:10px;margin:2px 0 10px;letter-spacing:2px;}
+    .diffRow{gap:6px;margin-bottom:8px;}
+    .diffBtn{padding:5px 12px;font-size:12px;}
+    .diffBtn small{font-size:8.5px;}
+    .themeGrid{grid-template-columns:repeat(5,1fr);gap:6px;margin-bottom:10px;max-width:560px;}
+    .themeCard{padding:6px 2px 5px;border-radius:10px;}
+    .themeCard svg{width:28px !important;height:28px !important;}
+    .themeCard .tn{font-size:8px;margin-top:3px;}
+    .bigBtn{font-size:14px;padding:9px 28px;letter-spacing:2px;}
+    .howto,.credits{display:none;}
+    .resultBig{font-size:30px;}
+    .resultStats{font-size:13px;margin:4px 0 12px;}
+    #overIcon svg{width:54px !important;height:54px !important;}
+  }
+  @media (orientation:landscape) and (max-height:580px) and (max-width:760px){
+    #themeSel{display:none;}
+  }
 </style>
 </head>
 <body>
@@ -156,8 +225,8 @@
     <div class="stat gold"><span id="hudCoin"></span><div><div class="lab">Gold</div><div class="v" id="gold">0</div></div></div>
     <div class="stat lives"><span id="hudHeart"></span><div><div class="lab">Lives</div><div class="v" id="lives">0</div></div></div>
     <div class="stat wave"><span id="hudWave"></span><div><div class="lab">Wave</div><div class="v" id="wave">0</div></div></div>
-    <div class="stat"><span id="hudStar"></span><div><div class="lab">Score</div><div class="v" id="score">0</div></div></div>
-    <div class="stat"><span id="hudSkull"></span><div><div class="lab">Kills</div><div class="v" id="kills">0</div></div></div>
+    <div class="stat score"><span id="hudStar"></span><div><div class="lab">Score</div><div class="v" id="score">0</div></div></div>
+    <div class="stat kills"><span id="hudSkull"></span><div><div class="lab">Kills</div><div class="v" id="kills">0</div></div></div>
     <div class="spacer"></div>
     <select id="themeSel" title="Switch universe any time"></select>
     <button class="btn" id="speedBtn"></button>
@@ -191,6 +260,12 @@
 </div>
 
 <div id="toast"></div>
+
+<div id="rotateHint">
+  <div class="ph"></div>
+  <div class="rt">ROTATE YOUR PHONE</div>
+  <div class="rs">WAVEFRONT plays best in landscape · tap to dismiss</div>
+</div>
 
 <div class="overlay" id="startOverlay">
   <div class="menu">
@@ -974,9 +1049,21 @@ cv.addEventListener('click',ev=>{
   }else toast(G.gold<TOWERS[G.selectedShop].cost?'Not enough gold':"Can't build there");
   return;
  }
- let hit=null,hd=30;for(const t of G.towers){const d=dist(t.x,t.y,p.x,p.y);if(d<hd){hd=d;hit=t;}}
+ let hit=null,hd=matchMedia('(pointer:coarse)').matches?46:30;
+ for(const t of G.towers){const d=dist(t.x,t.y,p.x,p.y);if(d<hd){hd=d;hit=t;}}
  G.selectedTower=hit;renderSel();
 });
+
+/* ---------- compact landscape: abilities live in the side column ---------- */
+const compactMQ=matchMedia('(orientation:landscape) and (max-height:580px)');
+function layoutMode(){
+ const abil=$('abilities');
+ if(compactMQ.matches)$('side').appendChild(abil);
+ else $('bottom').insertBefore(abil,$('nextWave'));
+}
+try{compactMQ.addEventListener('change',layoutMode);}catch(e){compactMQ.addListener(layoutMode);}
+layoutMode();
+$('rotateHint').addEventListener('click',()=>$('rotateHint').classList.add('off'));
 
 /* ---------- buttons ---------- */
 $('waveBtn').onclick=()=>{ac();startWave();};
