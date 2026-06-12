@@ -140,6 +140,40 @@
   .resultBig{font-size:46px;font-weight:900;margin:10px 0 4px;}
   .lose{color:var(--bad);text-shadow:0 0 30px rgba(255,77,109,.5);}
   .resultStats{font-size:16px;opacity:.85;margin:8px 0 22px;line-height:1.9;}
+  /* ---------- profiles & leaderboard ---------- */
+  #profileOverlay{z-index:95;}
+  .pfBox{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:22px 26px;max-width:340px;width:92vw;text-align:center;box-shadow:0 24px 70px rgba(0,0,0,.6);}
+  .pfBox h2{font-size:18px;letter-spacing:2px;margin-bottom:4px;}
+  .pfBox .sub{font-size:11px;opacity:.55;margin-bottom:14px;line-height:1.5;}
+  .pfBox input{width:100%;background:rgba(8,12,24,.8);border:1px solid var(--line);border-radius:10px;color:#fff;font-size:16px;font-weight:700;padding:11px 12px;margin-bottom:9px;text-align:center;letter-spacing:1px;-webkit-user-select:text;user-select:text;}
+  .pfBox input:focus{border-color:var(--cyan);box-shadow:0 0 12px rgba(57,230,255,.25);}
+  .pfBox .err{color:var(--bad);font-size:11px;min-height:14px;margin:2px 0 8px;font-weight:700;}
+  .lbPanel{max-width:380px;margin:0 auto 16px;background:var(--panel2);border:1px solid var(--line);border-radius:12px;padding:9px 12px;}
+  .lbPanel h4{font-size:9.5px;letter-spacing:1.6px;text-transform:uppercase;opacity:.55;margin-bottom:6px;display:flex;justify-content:space-between;}
+  .lbRow{display:flex;align-items:center;gap:8px;font-size:12.5px;font-weight:700;padding:3px 2px;border-bottom:1px solid rgba(120,160,255,0.07);}
+  .lbRow:last-child{border-bottom:none;}
+  .lbRow .rk{width:20px;text-align:center;font-weight:900;}
+  .lbRow:nth-child(2) .rk{color:#ffd24a;} .lbRow:nth-child(3) .rk{color:#c0c8d8;} .lbRow:nth-child(4) .rk{color:#d8915a;}
+  .lbRow .nm{flex:1;text-align:left;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .lbRow .wv{opacity:.6;font-size:10.5px;}
+  .lbRow .sc{color:var(--accent);font-variant-numeric:tabular-nums;}
+  .lbRow.me{background:rgba(57,230,255,.08);border-radius:7px;}
+  .lbRow.me .nm{color:var(--cyan);}
+  .playingAs{font-size:12px;opacity:.75;margin:-6px 0 12px;}
+  .playingAs b{color:var(--cyan);}
+  .playingAs a{color:var(--accent);cursor:pointer;text-decoration:underline;font-weight:700;}
+  #rankBox{margin:4px 0 16px;}
+  .rkHead{font-size:22px;font-weight:900;letter-spacing:1px;margin-bottom:8px;}
+  .rkHead b{color:var(--accent);}
+  .lbNote{font-size:10px;opacity:.45;margin-top:6px;}
+  @media (orientation:landscape) and (max-height:580px){
+    .pfBox{padding:14px 18px;}
+    .pfBox h2{font-size:15px;}
+    .lbPanel{padding:6px 10px;margin-bottom:10px;}
+    .lbRow{font-size:11px;padding:2px;}
+    .rkHead{font-size:16px;margin-bottom:4px;}
+    #rankBox{margin:2px 0 8px;}
+  }
   #toast{position:fixed;top:70px;left:50%;transform:translateX(-50%);background:rgba(0,0,0,.82);border:1px solid var(--line);padding:9px 18px;border-radius:11px;font-weight:700;z-index:60;opacity:0;transition:.3s;pointer-events:none;font-size:13px;}
   #toast.show{opacity:1;}
 
@@ -289,10 +323,23 @@
   <div class="rs">WAVEFRONT plays best in landscape · tap to dismiss</div>
 </div>
 
+<div class="overlay hidden" id="profileOverlay">
+  <div class="pfBox">
+    <h2>WHO'S PLAYING?</h2>
+    <div class="sub">Pick your battle name and a 4-digit PIN.<br>Same name + PIN gets your scores on any device.</div>
+    <input id="pfName" maxlength="14" placeholder="NAME" autocomplete="off">
+    <input id="pfPin" maxlength="4" inputmode="numeric" pattern="[0-9]*" type="password" placeholder="4-DIGIT PIN" autocomplete="off">
+    <div class="err" id="pfErr"></div>
+    <button class="bigBtn" id="pfGo" style="font-size:16px;padding:11px 34px;">ENTER</button>
+  </div>
+</div>
+
 <div class="overlay" id="startOverlay">
   <div class="menu">
     <div class="logo">WAVEFRONT</div>
     <div class="tag">Tactical Endless Tower Defense</div>
+    <div class="playingAs" id="playingAs"></div>
+    <div class="lbPanel" id="menuLb" style="display:none;"></div>
     <div id="bestLine" class="bestLine"></div>
     <div id="resumeRow" style="display:none;margin-bottom:14px;">
       <button class="bigBtn resume" id="resumeBtn">RESUME</button>
@@ -310,6 +357,7 @@
     <div id="overIcon"></div>
     <div class="resultBig lose" id="resultText">OVERRUN</div>
     <div class="resultStats" id="resultStats"></div>
+    <div id="rankBox"></div>
     <button class="bigBtn" id="againBtn">REDEPLOY</button>
   </div>
 </div>
@@ -1256,6 +1304,95 @@ try{compactMQ.addEventListener('change',layoutMode);}catch(e){compactMQ.addListe
 layoutMode();
 $('rotateHint').addEventListener('click',()=>$('rotateHint').classList.add('off'));
 
+/* ============================================================
+   GLOBAL LEADERBOARD & PROFILES
+   Players enter ONLY a name + 4-digit PIN (no email, ever).
+   Board lives in a kvdb.io bucket; offline falls back to a
+   cached local copy and syncs when the network returns.
+   ============================================================ */
+const LB_URL='https://kvdb.io/LASvkXhCBccg6HgG3FPvN2/board';
+const ME_KEY='wavefront_me_v1',LBCACHE_KEY='wavefront_lbcache_v1';
+function pinHash(name,pin){let h=5381;const s=name.toLowerCase()+'|'+pin+'|wavefront';for(let i=0;i<s.length;i++)h=((h<<5)+h+s.charCodeAt(i))>>>0;return h.toString(36);}
+function getMe(){try{return JSON.parse(localStorage.getItem(ME_KEY));}catch(e){return null;}}
+function setMe(m){try{localStorage.setItem(ME_KEY,JSON.stringify(m));}catch(e){}}
+function lbCache(){try{return JSON.parse(localStorage.getItem(LBCACHE_KEY))||{v:1,players:{}};}catch(e){return{v:1,players:{}};}}
+function setLbCache(b){try{localStorage.setItem(LBCACHE_KEY,JSON.stringify(b));}catch(e){}}
+async function lbFetch(){
+ try{
+  const r=await fetch(LB_URL,{cache:'no-store'});
+  if(r.status===404)return{v:1,players:{}};
+  if(!r.ok)return null;
+  const j=await r.json();
+  if(j&&j.players){setLbCache(j);return j;}
+  return{v:1,players:{}};
+ }catch(e){return null;}
+}
+async function lbPush(b){try{const r=await fetch(LB_URL,{method:'PUT',body:JSON.stringify(b)});return r.ok;}catch(e){return false;}}
+function lbSorted(board){return Object.values(board.players).filter(p=>p.score>0).sort((a,b)=>b.score-a.score);}
+function rankOf(board,name){const arr=lbSorted(board);const i=arr.findIndex(p=>p.name.toLowerCase()===name.toLowerCase());return{rank:i+1,total:arr.length,top:arr.slice(0,5)};}
+async function claimProfile(name,pin){
+ name=name.trim();
+ if(!/^[\w \-\.]{2,14}$/.test(name))return{ok:false,msg:'Name: 2–14 letters or numbers'};
+ if(!/^\d{4}$/.test(pin))return{ok:false,msg:'PIN must be exactly 4 digits'};
+ const h=pinHash(name,pin),key=name.toLowerCase();
+ const board=await lbFetch();
+ if(board){
+  const ex=board.players[key];
+  if(ex&&ex.pin&&ex.pin!==h)return{ok:false,msg:'That name is taken — wrong PIN'};
+  if(!ex){board.players[key]={name,pin:h,score:0,wave:0,diff:'',theme:'',when:Date.now()};setLbCache(board);lbPush(board);}
+ }
+ setMe({name,pinHash:h});
+ return{ok:true,offline:!board};
+}
+async function submitScore(){
+ const me=getMe();if(!me||G.score<=0)return null;
+ let board=await lbFetch();
+ const online=board!==null;
+ if(!online)board=lbCache();
+ const key=me.name.toLowerCase(),old=board.players[key];
+ if(old&&old.pin&&old.pin!==me.pinHash)return{board,conflict:true,online};
+ if(!old||G.score>old.score)
+  board.players[key]={name:me.name,pin:me.pinHash,score:G.score,wave:G.wave,diff:G.diff.k,theme:theme().id,when:Date.now()};
+ setLbCache(board);
+ let synced=false;
+ if(online)synced=await lbPush(board);
+ return{board,synced,online};
+}
+function lbRows(top,meName){
+ return top.map((p,i)=>`<div class="lbRow ${meName&&p.name.toLowerCase()===meName.toLowerCase()?'me':''}">
+  <span class="rk">${i+1}</span><span class="nm">${p.name.replace(/[<>&]/g,'')}</span>
+  <span class="wv">w${p.wave}</span><span class="sc">${p.score}</span></div>`).join('');
+}
+function showProfileOverlay(){
+ $('pfErr').textContent='';
+ $('profileOverlay').classList.remove('hidden');
+ const me=getMe();if(me)$('pfName').value=me.name;
+}
+$('pfGo').onclick=async()=>{
+ $('pfErr').textContent='';$('pfGo').classList.add('disabled');
+ const res=await claimProfile($('pfName').value,$('pfPin').value);
+ $('pfGo').classList.remove('disabled');
+ if(!res.ok){$('pfErr').textContent=res.msg;return;}
+ $('pfPin').value='';
+ $('profileOverlay').classList.add('hidden');
+ if(res.offline)toast('Leaderboard offline — scores will sync later');
+ refreshMenuLb();
+}
+$('pfPin').addEventListener('keydown',e=>{if(e.key==='Enter')$('pfGo').click();});
+async function refreshMenuLb(){
+ const me=getMe();
+ $('playingAs').innerHTML=me?`Playing as <b>${me.name.replace(/[<>&]/g,'')}</b> · <a id="switchPl">switch player</a>`:'';
+ const sw=$('switchPl');if(sw)sw.onclick=()=>showProfileOverlay();
+ const cached=lbCache(),cachedTop=lbSorted(cached).slice(0,5);
+ const panel=$('menuLb');
+ if(cachedTop.length){panel.style.display='block';panel.innerHTML='<h4><span>Top 5 — All Players</span></h4>'+lbRows(cachedTop,me&&me.name);}
+ const board=await lbFetch();
+ if(board){const top=lbSorted(board).slice(0,5);
+  if(top.length){panel.style.display='block';panel.innerHTML='<h4><span>Top 5 — All Players</span></h4>'+lbRows(top,me&&me.name);}
+  else panel.style.display='none';
+ }
+}
+
 /* ---------- save / resume / best ---------- */
 const SAVE_KEY='wavefront_save_v1',BEST_KEY='wavefront_best_v1';
 function saveGame(){
@@ -1330,6 +1467,7 @@ function openStart(){
  if(G)menuTheme=G.theme;buildMenu();
  const row=$('resumeRow'),btn=$('resumeBtn');
  const live=G&&G.running&&!G.over,save=live?null:loadSave();
+ refreshMenuLb();
  if(live){row.style.display='block';btn.innerHTML=svgIcon('ui_play','#fff',16)+' RESUME — WAVE '+(G.waveActive?G.wave:G.wave+1);}
  else if(save){row.style.display='block';btn.innerHTML=svgIcon('ui_play','#fff',16)+' CONTINUE — WAVE '+((save.wave||0)+1)+' · '+(THEMES[save.theme]?THEMES[save.theme].name:'');}
  else row.style.display='none';
@@ -1353,7 +1491,20 @@ function gameOver(){
  $('overIcon').innerHTML=svgIcon(th.id+'_boss',bc,90,'filter:drop-shadow(0 0 16px '+rgba(bc,0.7)+')');
  $('resultText').textContent='OVERRUN';
  $('resultStats').innerHTML=`You held for <b>${G.wave}</b> waves<br>Score <b>${G.score}</b> · Kills <b>${G.kills}</b><br>${th.name} · ${G.diff.n}`;
+ $('rankBox').innerHTML='<div class="lbNote">Ranking…</div>';
  $('overOverlay').classList.remove('hidden');
+ submitScore().then(res=>{
+  if(!res){$('rankBox').innerHTML='';return;}
+  const me=getMe();
+  const{rank,total,top}=rankOf(res.board,me.name);
+  let html='';
+  if(rank>0)html+=`<div class="rkHead">RANK <b>#${rank}</b> of ${total}</div>`;
+  if(top.length)html+=`<div class="lbPanel" style="margin-bottom:0;">`+
+   '<h4><span>Top 5 — All Players</span></h4>'+lbRows(top,me.name)+'</div>';
+  if(res.conflict)html+='<div class="lbNote">Name owned by a different PIN — score not submitted.</div>';
+  else if(!res.synced)html+='<div class="lbNote">Offline — saved locally, will sync next time.</div>';
+  $('rankBox').innerHTML=html;
+ });
 }
 $('playBtn').onclick=()=>{ac();newGame();};
 $('againBtn').onclick=()=>openStart();
@@ -1361,6 +1512,8 @@ $('againBtn').onclick=()=>openStart();
 /* ---------- boot ---------- */
 G=freshState();
 buildMenu();onThemeChange();buildAbilities();updateWaveBtn();refreshChrome();
+refreshMenuLb();
+if(!getMe())showProfileOverlay();
 requestAnimationFrame(loop);
 </script>
 </body>
