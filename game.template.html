@@ -1066,7 +1066,7 @@ function renderBlueprint(card){
    <div class="row"><span>Max level</span><b>${MAX_LVL}</b></div>
   </div>
   <div class="bpHow">${TRAIT_INFO[T.trait]}</div>
-  <div class="bpHow" style="color:var(--good);border:none;margin-top:2px;">${G.gold>=T.cost?(IS_TOUCH?'Tap the field to preview & drag to position — double-tap to build.':'Click any open tile on the battlefield to build it.'):'Not enough gold yet — earn '+(T.cost-Math.floor(G.gold))+' more.'}</div>`;
+  <div class="bpHow" style="color:var(--good);border:none;margin-top:2px;">${G.gold>=T.cost?(IS_TOUCH?'Tap the field to preview, drag to position, then tap the tower again to build.':'Click any open tile on the battlefield to build it.'):'Not enough gold yet — earn '+(T.cost-Math.floor(G.gold))+' more.'}</div>`;
 }
 function renderAbilityInfo(card){
  const A=ABILITIES[G.infoAbility];if(!A){card.style.display='none';return;}
@@ -1091,7 +1091,7 @@ function buildAbilities(){
    ac();
    if(!IS_TOUCH){useAbility(i);return;}
    const now=performance.now();
-   if(G.infoAbility===i&&now-(buildAbilities._t||0)<450){buildAbilities._t=0;useAbility(i);}
+   if(G.infoAbility===i&&now-(buildAbilities._t||0)<800){buildAbilities._t=0;useAbility(i);}
    else{buildAbilities._t=now;G.infoAbility=i;G.selectedShop=-1;G.selectedTower=null;clearPending();renderSel();refreshHUD();}
   };
   bar.appendChild(d);
@@ -1160,35 +1160,23 @@ function clearPending(){G.pendingCell=null;}
 let lastTap={t:0,x:0,y:0,kind:'',target:null},lastHintAt=0;
 function isDouble(p,kind,target){
  const now=performance.now();
- const ok=(now-lastTap.t<420)&&Math.hypot(p.x-lastTap.x,p.y-lastTap.y)<52&&lastTap.kind===kind&&lastTap.target===target;
+ const ok=(now-lastTap.t<700)&&Math.hypot(p.x-lastTap.x,p.y-lastTap.y)<96&&lastTap.kind===kind&&lastTap.target===target;
  lastTap={t:now,x:p.x,y:p.y,kind,target:(target===undefined?null:target)};
  return ok;
 }
-function placeHint(){const now=performance.now();if(now-lastHintAt>7000){lastHintAt=now;toast('Drag to position · double-tap to build');}}
+function placeHint(){const now=performance.now();if(now-lastHintAt>7000){lastHintAt=now;toast('Drag to position · tap the tower again to build');}}
 
 cv.addEventListener('mousemove',ev=>{const p=canvasPoint(ev.clientX,ev.clientY);G.hoverCell={c:p.c,r:p.r};});
 cv.addEventListener('mouseleave',()=>G.hoverCell=null);
-cv.addEventListener('touchstart',ev=>{
- const t=ev.touches[0],p=canvasPoint(t.clientX,t.clientY);
- G.hoverCell={c:p.c,r:p.r};
- if(G.selectedShop>=0&&!G.paused&&!G.pendingCell)G.pendingCell={c:p.c,r:p.r};
-},{passive:true});
-cv.addEventListener('touchmove',ev=>{
- const t=ev.touches[0],p=canvasPoint(t.clientX,t.clientY);
- G.hoverCell={c:p.c,r:p.r};
- if(G.selectedShop>=0&&G.pendingCell){G.pendingCell={c:p.c,r:p.r};ev.preventDefault();}
-},{passive:false});
-cv.addEventListener('click',ev=>{
- ac();
+function handleTap(p){
  if(G.paused)return;
- const p=canvasPoint(ev.clientX,ev.clientY);
  if(G.aiming){const idx=ABILITIES.findIndex(a=>a.key===G.aiming);commitAbility(idx,p.x,p.y);G.aiming=null;return;}
  if(G.selectedShop>=0){
-  if(IS_TOUCH){ // tap = preview ghost (draggable); double-tap same spot = build
-   const dbl=isDouble(p,'place',G.selectedShop);
-   G.pendingCell={c:p.c,r:p.r};
-   if(dbl){if(placeTower(p.c,p.r))G.pendingCell=null;}
-   else placeHint();
+  if(IS_TOUCH){ // tap = preview ghost (draggable); tap the ghost again = build (no timing)
+   const g=G.pendingCell;
+   const onGhost=g&&dist(p.x,p.y,g.c*TILE+TILE/2,g.r*TILE+TILE/2)<70;
+   if(onGhost){if(placeTower(g.c,g.r))G.pendingCell=null;}
+   else{G.pendingCell={c:p.c,r:p.r};placeHint();}
   } else placeTower(p.c,p.r); // instant on mouse
   return;
  }
@@ -1197,6 +1185,37 @@ cv.addEventListener('click',ev=>{
  if(hit&&isDouble(p,'tower',hit)){G.selectedTower=hit;G.infoAbility=null;renderSel();tryUpgrade(hit);return;}
  if(!hit)isDouble(p,'bg',null); // reset chain
  G.selectedTower=hit;if(hit)G.infoAbility=null;renderSel();
+}
+/* Touch taps are detected at the raw touch layer — iOS suppresses synthesized
+   clicks on micro-movement, which made double-tap flaky. */
+let touchInfo=null;
+cv.addEventListener('touchstart',ev=>{
+ const t=ev.touches[0],p=canvasPoint(t.clientX,t.clientY);
+ G.hoverCell={c:p.c,r:p.r};
+ touchInfo={x:t.clientX,y:t.clientY,t:performance.now()};
+ if(G.selectedShop>=0&&!G.paused&&!G.pendingCell)G.pendingCell={c:p.c,r:p.r};
+},{passive:true});
+cv.addEventListener('touchmove',ev=>{
+ const t=ev.touches[0],p=canvasPoint(t.clientX,t.clientY);
+ G.hoverCell={c:p.c,r:p.r};
+ if(G.selectedShop>=0&&G.pendingCell){G.pendingCell={c:p.c,r:p.r};ev.preventDefault();}
+},{passive:false});
+cv.addEventListener('touchend',ev=>{
+ if(!touchInfo)return;
+ const t=ev.changedTouches[0];
+ const moved=Math.hypot(t.clientX-touchInfo.x,t.clientY-touchInfo.y);
+ const dur=performance.now()-touchInfo.t;
+ touchInfo=null;
+ if(moved<22&&dur<700){ // it's a tap — handle it ourselves, suppress the synthetic click
+  ev.preventDefault();
+  ac();
+  handleTap(canvasPoint(t.clientX,t.clientY));
+ }
+},{passive:false});
+cv.addEventListener('click',ev=>{
+ if(IS_TOUCH)return; // touch path handled via touchend
+ ac();
+ handleTap(canvasPoint(ev.clientX,ev.clientY));
 });
 
 /* ---------- compact landscape: abilities live in the side column ---------- */
