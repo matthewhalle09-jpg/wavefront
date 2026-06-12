@@ -153,7 +153,6 @@
   .lbRow{display:flex;align-items:center;gap:8px;font-size:12.5px;font-weight:700;padding:3px 2px;border-bottom:1px solid rgba(120,160,255,0.07);}
   .lbRow:last-child{border-bottom:none;}
   .lbRow .rk{width:20px;text-align:center;font-weight:900;}
-  .lbRow:nth-child(2) .rk{color:#ffd24a;} .lbRow:nth-child(3) .rk{color:#c0c8d8;} .lbRow:nth-child(4) .rk{color:#d8915a;}
   .lbRow .nm{flex:1;text-align:left;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
   .lbRow .wv{opacity:.6;font-size:10.5px;}
   .lbRow .sc{color:var(--accent);font-variant-numeric:tabular-nums;}
@@ -166,6 +165,13 @@
   .rkHead{font-size:22px;font-weight:900;letter-spacing:1px;margin-bottom:8px;}
   .rkHead b{color:var(--accent);}
   .lbNote{font-size:10px;opacity:.45;margin-top:6px;}
+  .lbScroll{overflow-y:auto;-webkit-overflow-scrolling:touch;}
+  .lbTabs{display:flex;gap:4px;margin-bottom:6px;}
+  .lbTabs button{flex:1;font-size:9.5px;padding:5px 2px;border-radius:7px;background:var(--panel2);border:1px solid var(--line);font-weight:800;letter-spacing:.4px;}
+  .lbTabs button.on{background:linear-gradient(180deg,#2c4fb0,#1d3578);box-shadow:0 0 10px rgba(57,120,255,.4);}
+  .lbRow.top{background:rgba(255,207,77,.06);}
+  .lbRow.meRun{outline:1.5px solid var(--cyan);border-radius:7px;background:rgba(57,230,255,.10);}
+  .lbRow .df{font-size:9px;font-weight:900;width:12px;text-align:center;opacity:.9;}
   @media (orientation:landscape) and (max-height:580px){
     .pfBox{padding:14px 18px;}
     .pfBox h2{font-size:15px;}
@@ -1309,58 +1315,80 @@ $('rotateHint').addEventListener('click',()=>$('rotateHint').classList.add('off'
    Board lives in a kvdb.io bucket; offline falls back to a
    cached local copy and syncs when the network returns.
    ============================================================ */
-const LB_URL='https://kvdb.io/LASvkXhCBccg6HgG3FPvN2/board';
-const ME_KEY='wavefront_me_v1',LBCACHE_KEY='wavefront_lbcache_v1';
+const LB_BASE='https://kvdb.io/LASvkXhCBccg6HgG3FPvN2/';
+const ME_KEY='wavefront_me_v1',PEND_KEY='wavefront_pendruns_v1',CACHE2='wavefront_lb2_',OLDCACHE='wavefront_lbcache_v1';
+const LB_CAP=150;
+const esc=s=>String(s).replace(/[<>&]/g,'');
 function pinHash(name,pin){let h=5381;const s=name.toLowerCase()+'|'+pin+'|wavefront';for(let i=0;i<s.length;i++)h=((h<<5)+h+s.charCodeAt(i))>>>0;return h.toString(36);}
 function getMe(){try{return JSON.parse(localStorage.getItem(ME_KEY));}catch(e){return null;}}
 function setMe(m){try{localStorage.setItem(ME_KEY,JSON.stringify(m));}catch(e){}}
-function lbCache(){try{return JSON.parse(localStorage.getItem(LBCACHE_KEY))||{v:1,players:{}};}catch(e){return{v:1,players:{}};}}
-function setLbCache(b){try{localStorage.setItem(LBCACHE_KEY,JSON.stringify(b));}catch(e){}}
-async function lbFetch(){
- try{
-  const r=await fetch(LB_URL,{cache:'no-store'});
-  if(r.status===404)return{v:1,players:{}};
+async function kvGet(key){
+ try{const r=await fetch(LB_BASE+key,{cache:'no-store'});
+  if(r.status===404)return{missing:true};
   if(!r.ok)return null;
-  const j=await r.json();
-  if(j&&j.players){setLbCache(j);return j;}
-  return{v:1,players:{}};
+  const t=await r.text();
+  try{const j=JSON.parse(t);return j;}catch(e){return{missing:true};}
  }catch(e){return null;}
 }
-async function lbPush(b){try{const r=await fetch(LB_URL,{method:'PUT',body:JSON.stringify(b)});return r.ok;}catch(e){return false;}}
-function lbSorted(board){return Object.values(board.players).filter(p=>p.score>0).sort((a,b)=>b.score-a.score);}
-function rankOf(board,name){const arr=lbSorted(board);const i=arr.findIndex(p=>p.name.toLowerCase()===name.toLowerCase());return{rank:i+1,total:arr.length,top:arr.slice(0,5)};}
+async function kvPut(key,val){try{const r=await fetch(LB_BASE+key,{method:'PUT',body:JSON.stringify(val)});return r.ok;}catch(e){return false;}}
+/* ----- run history: one scrollable board per difficulty, every game kept ----- */
+function runsKey(dk){return 'runs_'+dk;}
+function cachedRuns(dk){try{return JSON.parse(localStorage.getItem(CACHE2+dk))||[];}catch(e){return[];}}
+function cacheRuns(dk,l){try{localStorage.setItem(CACHE2+dk,JSON.stringify(l));}catch(e){}}
+function pendingRuns(){try{return JSON.parse(localStorage.getItem(PEND_KEY))||[];}catch(e){return[];}}
+function setPending(p){try{localStorage.setItem(PEND_KEY,JSON.stringify(p));}catch(e){}}
+function mergeRuns(a,b){const m={};for(const r of[...a,...b])if(r&&r.id)m[r.id]=r;return Object.values(m).sort((x,y)=>y.score-x.score||x.when-y.when).slice(0,LB_CAP);}
+function migrateV1(){ /* recover bests stranded in the old best-per-player cache (pre-activation scores) */
+ try{const old=JSON.parse(localStorage.getItem(OLDCACHE));if(!old||!old.players)return;
+  const pend=pendingRuns();
+  for(const p of Object.values(old.players)){if(p&&p.score>0)pend.push({id:'mig_'+(p.when||0)+'_'+(p.name||'').toLowerCase(),name:p.name,score:p.score,wave:p.wave||0,diff:p.diff||'hard',theme:p.theme||'mid',when:p.when||Date.now()});}
+  setPending(pend);localStorage.removeItem(OLDCACHE);
+ }catch(e){}
+}
+async function syncRuns(dk,newRun){
+ let pend=pendingRuns();
+ if(newRun){pend.push(newRun);setPending(pend);}
+ const remote=await kvGet(runsKey(dk));
+ const online=remote!==null;
+ const remoteList=(online&&Array.isArray(remote))?remote:[];
+ const mine=pend.filter(r=>r.diff===dk);
+ let list=mergeRuns(mergeRuns(remoteList,cachedRuns(dk)),mine);
+ let synced=false;
+ if(online){
+  if(mine.length||(remote&&remote.missing))synced=await kvPut(runsKey(dk),list);
+  else synced=true;
+  if(synced&&mine.length)setPending(pendingRuns().filter(r=>r.diff!==dk));
+ }
+ cacheRuns(dk,list);
+ return{list,synced,online};
+}
+async function flushPending(){const pend=pendingRuns();if(!pend.length)return;for(const dk of[...new Set(pend.map(r=>r.diff))])await syncRuns(dk,null);}
+/* ----- profiles: name + PIN only ----- */
 async function claimProfile(name,pin){
  name=name.trim();
- if(!/^[\w \-\.]{2,14}$/.test(name))return{ok:false,msg:'Name: 2–14 letters or numbers'};
+ if(!/^[\w \-\.]{2,14}$/.test(name))return{ok:false,msg:'Name: 2\u201314 letters or numbers'};
  if(!/^\d{4}$/.test(pin))return{ok:false,msg:'PIN must be exactly 4 digits'};
  const h=pinHash(name,pin),key=name.toLowerCase();
- const board=await lbFetch();
- if(board){
-  const ex=board.players[key];
-  if(ex&&ex.pin&&ex.pin!==h)return{ok:false,msg:'That name is taken — wrong PIN'};
-  if(!ex){board.players[key]={name,pin:h,score:0,wave:0,diff:'',theme:'',when:Date.now()};setLbCache(board);lbPush(board);}
- }
+ const prof=await kvGet('profiles');
+ if(prof===null){setMe({name,pinHash:h});return{ok:true,offline:true};}
+ const p=prof.missing?{}:prof;
+ const ex=p[key];
+ if(ex&&ex.pin&&ex.pin!==h)return{ok:false,msg:'That name is taken \u2014 wrong PIN'};
+ if(!ex){p[key]={name,pin:h,when:Date.now()};kvPut('profiles',p);}
  setMe({name,pinHash:h});
- return{ok:true,offline:!board};
+ return{ok:true};
 }
-async function submitScore(){
- const me=getMe();if(!me||G.score<=0)return null;
- let board=await lbFetch();
- const online=board!==null;
- if(!online)board=lbCache();
- const key=me.name.toLowerCase(),old=board.players[key];
- if(old&&old.pin&&old.pin!==me.pinHash)return{board,conflict:true,online};
- if(!old||G.score>old.score)
-  board.players[key]={name:me.name,pin:me.pinHash,score:G.score,wave:G.wave,diff:G.diff.k,theme:theme().id,when:Date.now()};
- setLbCache(board);
- let synced=false;
- if(online)synced=await lbPush(board);
- return{board,synced,online};
-}
-function lbRows(top,meName){
- return top.map((p,i)=>`<div class="lbRow ${meName&&p.name.toLowerCase()===meName.toLowerCase()?'me':''}">
-  <span class="rk">${i+1}</span><span class="nm">${p.name.replace(/[<>&]/g,'')}</span>
-  <span class="wv">w${p.wave}</span><span class="sc">${p.score}</span></div>`).join('');
+/* ----- rendering ----- */
+const RANK_C=['#ffd24a','#c0c8d8','#d8915a'];
+const DIFF_TAG={normal:['R','#46e08a'],hard:['V','#39a6ff'],brutal:['N','#ff4d6d']};
+function lbListHTML(list,myId,meName,maxH,showDiff){
+ if(!list.length)return '<div class="lbNote">No runs yet \u2014 be the first on the board!</div>';
+ return '<div class="lbScroll" style="max-height:'+(maxH||180)+'px;">'+list.map((r,i)=>{
+  const cls='lbRow'+(i<5?' top':'')+(myId&&r.id===myId?' meRun':'')+((meName&&r.name&&r.name.toLowerCase()===meName.toLowerCase())?' me':'');
+  const rkStyle=i<3?' style="color:'+RANK_C[i]+'"':'';
+  const tag=showDiff&&DIFF_TAG[r.diff]?'<span class="df" style="color:'+DIFF_TAG[r.diff][1]+'">'+DIFF_TAG[r.diff][0]+'</span>':'';
+  return '<div class="'+cls+'"><span class="rk"'+rkStyle+'>'+(i+1)+'</span><span class="nm">'+esc(r.name)+'</span>'+tag+'<span class="wv">w'+r.wave+'</span><span class="sc">'+r.score+'</span></div>';
+ }).join('')+'</div>';
 }
 function showProfileOverlay(){
  $('pfErr').textContent='';
@@ -1374,24 +1402,34 @@ $('pfGo').onclick=async()=>{
  if(!res.ok){$('pfErr').textContent=res.msg;return;}
  $('pfPin').value='';
  $('profileOverlay').classList.add('hidden');
- if(res.offline)toast('Leaderboard offline — scores will sync later');
+ if(res.offline)toast('Leaderboard offline \u2014 scores will sync later');
  refreshMenuLb();
 }
 $('pfPin').addEventListener('keydown',e=>{if(e.key==='Enter')$('pfGo').click();});
+let menuLbDiff=-1; // -1 = Best Overall
+function overallList(lists){const m={};for(const l of lists)for(const r of l)if(r&&r.id)m[r.id]=r;return Object.values(m).sort((x,y)=>y.score-x.score||x.when-y.when);}
 async function refreshMenuLb(){
  const me=getMe();
- $('playingAs').innerHTML=me?`Playing as <b>${me.name.replace(/[<>&]/g,'')}</b> · <a id="switchPl">switch player</a>`:'';
+ $('playingAs').innerHTML=me?('Playing as <b>'+esc(me.name)+'</b> \u00b7 <a id="switchPl">switch player</a>'):'';
  const sw=$('switchPl');if(sw)sw.onclick=()=>showProfileOverlay();
- const cached=lbCache(),cachedTop=lbSorted(cached).slice(0,5);
- const panel=$('menuLb');
- if(cachedTop.length){panel.style.display='block';panel.innerHTML='<h4><span>Top 5 — All Players</span></h4>'+lbRows(cachedTop,me&&me.name);}
- const board=await lbFetch();
- if(board){const top=lbSorted(board).slice(0,5);
-  if(top.length){panel.style.display='block';panel.innerHTML='<h4><span>Top 5 — All Players</span></h4>'+lbRows(top,me&&me.name);}
-  else panel.style.display='none';
+ const sel=menuLbDiff,panel=$('menuLb');
+ const tabs='<div class="lbTabs"><button data-i="-1" class="'+(sel===-1?'on':'')+'">Overall</button>'+DIFF.map((d,i)=>'<button data-i="'+i+'" class="'+(i===sel?'on':'')+'">'+d.n+'</button>').join('')+'</div>';
+ const paint=list=>{
+  panel.style.display='block';
+  panel.innerHTML='<h4><span>'+(sel===-1?'Best Overall \u2014 every run counts':DIFF[sel].n+' board \u2014 every run counts')+'</span></h4>'+tabs+lbListHTML(list,null,me&&me.name,160,sel===-1);
+  panel.querySelectorAll('.lbTabs button').forEach(b=>b.onclick=()=>{menuLbDiff=+b.dataset.i;refreshMenuLb();});
+ };
+ if(sel===-1){
+  paint(overallList(DIFF.map(d=>cachedRuns(d.k))));
+  const res=await Promise.all(DIFF.map(d=>syncRuns(d.k,null)));
+  if(menuLbDiff===-1)paint(overallList(res.map(r=>r.list)));
+ }else{
+  const dk=DIFF[sel].k;
+  paint(cachedRuns(dk));
+  const res=await syncRuns(dk,null);
+  if(menuLbDiff===sel)paint(res.list);
  }
 }
-
 /* ---------- save / resume / best ---------- */
 const SAVE_KEY='wavefront_save_v1',BEST_KEY='wavefront_best_v1';
 function saveGame(){
@@ -1490,20 +1528,21 @@ function gameOver(){
  $('overIcon').innerHTML=svgIcon(th.id+'_boss',bc,90,'filter:drop-shadow(0 0 16px '+rgba(bc,0.7)+')');
  $('resultText').textContent='OVERRUN';
  $('resultStats').innerHTML=`You held for <b>${G.wave}</b> waves<br>Score <b>${G.score}</b> · Kills <b>${G.kills}</b><br>${th.name} · ${G.diff.n}`;
- $('rankBox').innerHTML='<div class="lbNote">Ranking…</div>';
+ $('rankBox').innerHTML='<div class="lbNote">Ranking\u2026</div>';
  $('overOverlay').classList.remove('hidden');
- submitScore().then(res=>{
-  if(!res){$('rankBox').innerHTML='';return;}
-  const me=getMe();
-  const{rank,total,top}=rankOf(res.board,me.name);
-  let html='';
-  if(rank>0)html+=`<div class="rkHead">RANK <b>#${rank}</b> of ${total}</div>`;
-  if(top.length)html+=`<div class="lbPanel" style="margin-bottom:0;">`+
-   '<h4><span>Top 5 — All Players</span></h4>'+lbRows(top,me.name)+'</div>';
-  if(res.conflict)html+='<div class="lbNote">Name owned by a different PIN — score not submitted.</div>';
-  else if(!res.synced)html+='<div class="lbNote">Offline — saved locally, will sync next time.</div>';
-  $('rankBox').innerHTML=html;
- });
+ const me=getMe();
+ if(me&&G.score>0){
+  const run={id:Date.now().toString(36)+Math.random().toString(36).slice(2,7),name:me.name,score:G.score,wave:G.wave,diff:G.diff.k,theme:theme().id,when:Date.now()};
+  syncRuns(G.diff.k,run).then(res=>{
+   const list=res.list,idx=list.findIndex(r=>r.id===run.id);
+   let html='';
+   if(idx>=0)html+='<div class="rkHead">RANK <b>#'+(idx+1)+'</b> of '+list.length+' \u00b7 '+G.diff.n+'</div>';
+   html+='<div class="lbPanel" style="margin-bottom:0;"><h4><span>'+G.diff.n+' board \u2014 every run counts</span></h4>'+lbListHTML(list,run.id,me.name,150)+'</div>';
+   if(!res.synced)html+='<div class="lbNote">Offline \u2014 saved locally, will sync next time.</div>';
+   $('rankBox').innerHTML=html;
+   const mine=$('rankBox').querySelector('.meRun');if(mine)mine.scrollIntoView({block:'center'});
+  });
+ } else $('rankBox').innerHTML='';
 }
 $('playBtn').onclick=()=>{ac();newGame();};
 $('againBtn').onclick=()=>openStart();
@@ -1511,6 +1550,7 @@ $('againBtn').onclick=()=>openStart();
 /* ---------- boot ---------- */
 G=freshState();
 buildMenu();onThemeChange();buildAbilities();updateWaveBtn();refreshChrome();
+migrateV1();flushPending();
 refreshMenuLb();
 if(!getMe())showProfileOverlay();
 requestAnimationFrame(loop);
