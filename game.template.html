@@ -50,6 +50,8 @@
   #stageWrap{position:relative;border-radius:16px;overflow:hidden;border:1px solid var(--line);box-shadow:0 22px 70px rgba(0,0,0,.65);flex:1 1 auto;max-width:1024px;}
   canvas{display:block;width:100%;height:auto;background:#05080f;touch-action:none;}
   .abil.sel{outline:2px solid var(--cyan);}
+  .alv{display:flex;gap:2px;justify-content:center;margin-top:2px;min-height:4px;}
+  .alv i{width:5px;height:4px;border-radius:2px;background:linear-gradient(90deg,#ffcf4d,#ff8a3c);display:block;}
 
   /* ---------- Side ---------- */
   #side{width:316px;flex:0 0 316px;display:flex;flex-direction:column;gap:8px;}
@@ -456,6 +458,16 @@ const ABILITIES=[
  {key:'freeze',name:'Cryo Nuke',icon:'ab_freeze',cost:110,cd:30,desc:'Freeze everything 2.5s',info:'Flash-freezes EVERY enemy on the field solid for 2.5 seconds, then leaves them slowed. Panic button for leaks and boss pushes.'},
  {key:'rally', name:'War Rally',icon:'ab_rally', cost:95, cd:26,desc:'+70% fire rate for 6s',info:'All towers fire 70% faster for 6 seconds. Strongest when your board is fully built and a boss is in range.'},
 ];
+const ABIL_MAX=5;
+function abilLvl(key){return(G&&G.abilLvl&&G.abilLvl[key])||1;}
+function abilUpCost(key){return Math.round(400*Math.pow(1.8,abilLvl(key)-1));}
+function abilCd(A){return A.cd*(1-0.05*(abilLvl(A.key)-1));}
+function abilStats(key,L){
+ L=L||abilLvl(key);
+ if(key==='strike')return[['Power',Math.round(100*(1+0.3*(L-1)))+'%'],['Radius',105+12*(L-1)],['Burn',(3+0.6*(L-1)).toFixed(1)+'s']];
+ if(key==='freeze')return[['Freeze',(2.5+0.6*(L-1)).toFixed(1)+'s'],['Slow linger',(4+(L-1))+'s']];
+ return[['Duration',(6+1.5*(L-1)).toFixed(1)+'s'],['Fire rate','+70%']];
+}
 const DIFF=[{k:'normal',n:'Recruit',hp:0.9, spd:0.92,gold:340,lives:25,sub:'Forgiving start'},
             {k:'hard',  n:'Veteran',hp:1.12,spd:1.0, gold:280,lives:18,sub:'The real game'},
             {k:'brutal',n:'Nightmare',hp:1.22,spd:1.06,gold:260,lives:12,sub:'For masochists'}];
@@ -471,7 +483,7 @@ function buildable(c,r){return c>=0&&c<COLS&&r>=0&&r<ROWS&&!pathCells.has(c+','+
 let G,diffIdx=1,enemySeq=0;
 function freshState(){return{theme:0,diff:DIFF[diffIdx],gold:DIFF[diffIdx].gold,lives:DIFF[diffIdx].lives,wave:0,score:0,kills:0,
  towers:[],enemies:[],projs:[],parts:[],floats:[],bolts:[],rings:[],spawnQueue:[],spawnTimer:0,wScale:{hp:1,spd:1,rw:1},
- waveActive:false,running:false,over:false,paused:false,selectedShop:-1,selectedTower:null,infoAbility:null,hoverCell:null,
+ waveActive:false,running:false,over:false,paused:false,selectedShop:-1,selectedTower:null,infoAbility:null,hoverCell:null,abilLvl:{strike:1,freeze:1,rally:1},
  speed:1,muted:false,time:0,shake:0,banner:null,bannerT:0,bannerColor:'#fff',rallyUntil:0,aiming:null,abilReady:{strike:0,freeze:0,rally:0}};}
 function theme(){return THEMES[G.theme];}
 
@@ -660,10 +672,11 @@ function useAbility(i){
  commitAbility(i);
 }
 function commitAbility(i,x,y){
- const A=ABILITIES[i];G.gold-=A.cost;G.abilReady[A.key]=G.time+A.cd;sBoom();
- if(A.key==='freeze'){for(const e of G.enemies){e.stunUntil=G.time+2.5;e.slowUntil=G.time+4;e.slowF=Math.min(e.slowF,0.4);burst(e.x,e.y,'#bfe9ff',5);}G.banner='CRYO NUKE';G.bannerColor='#7fe6ff';G.bannerT=1.3;}
- else if(A.key==='rally'){G.rallyUntil=G.time+6;G.banner='WAR RALLY';G.bannerColor='#ffcf4d';G.bannerT=1.3;}
- else if(A.key==='strike'){const dmg=110*Math.pow(1.14,G.wave);G.shake=16;ring(x,y,105,'#ff8a3c');for(const e of G.enemies.slice()){if(dist(x,y,e.x,e.y)<105){damage(e,dmg,{trueDmg:true});if(G.enemies.indexOf(e)!==-1)e.dots.push({dps:dmg*0.12,rem:3,owner:null});}}for(let k=0;k<40;k++)burst(x+(Math.random()-0.5)*120,y+(Math.random()-0.5)*120,'#ff8a3c',1);}
+ const A=ABILITIES[i],L=abilLvl(A.key);
+ G.gold-=A.cost;G.abilReady[A.key]=G.time+abilCd(A);sBoom();
+ if(A.key==='freeze'){const fz=2.5+0.6*(L-1),lin=4+(L-1);for(const e of G.enemies){e.stunUntil=G.time+fz;e.slowUntil=G.time+fz+lin;e.slowF=Math.min(e.slowF,0.4);burst(e.x,e.y,'#bfe9ff',5);}G.banner='CRYO NUKE'+(L>1?' '+L:'');G.bannerColor='#7fe6ff';G.bannerT=1.3;}
+ else if(A.key==='rally'){G.rallyUntil=G.time+6+1.5*(L-1);G.banner='WAR RALLY'+(L>1?' '+L:'');G.bannerColor='#ffcf4d';G.bannerT=1.3;}
+ else if(A.key==='strike'){const dmg=110*Math.pow(1.14,G.wave)*(1+0.3*(L-1)),rad=105+12*(L-1);G.shake=16;ring(x,y,rad,'#ff8a3c');for(const e of G.enemies.slice()){if(dist(x,y,e.x,e.y)<rad){damage(e,dmg,{trueDmg:true});if(G.enemies.indexOf(e)!==-1)e.dots.push({dps:dmg*0.12,rem:3+0.6*(L-1),owner:null});}}for(let k=0;k<40;k++)burst(x+(Math.random()-0.5)*rad*1.6,y+(Math.random()-0.5)*rad*1.6,'#ff8a3c',1);}
  refreshHUD();saveGame();
 }
 
@@ -889,7 +902,7 @@ function render(){
  if(G.aiming&&G.hoverCell){
   const cc=cellCenter(G.hoverCell.c,G.hoverCell.r);
   ctx.strokeStyle='rgba(255,138,60,0.85)';ctx.lineWidth=2.4;
-  ctx.beginPath();ctx.arc(cc.x,cc.y,105,0,TAU);ctx.stroke();
+  ctx.beginPath();ctx.arc(cc.x,cc.y,105+12*(abilLvl('strike')-1),0,TAU);ctx.stroke();
   ctx.fillStyle='rgba(255,138,60,0.12)';ctx.fill();
   ctx.beginPath();ctx.moveTo(cc.x-14,cc.y);ctx.lineTo(cc.x+14,cc.y);ctx.moveTo(cc.x,cc.y-14);ctx.lineTo(cc.x,cc.y+14);ctx.stroke();
  }
@@ -1070,22 +1083,34 @@ function renderBlueprint(card){
 }
 function renderAbilityInfo(card){
  const A=ABILITIES[G.infoAbility];if(!A){card.style.display='none';return;}
+ const L=abilLvl(A.key),maxed=L>=ABIL_MAX,uc=abilUpCost(A.key);
+ const cur=abilStats(A.key,L),nxt=maxed?cur:abilStats(A.key,L+1);
+ let pips='';for(let i=0;i<ABIL_MAX;i++)pips+=`<div class="pip ${i<L?'on':''}"></div>`;
  card.style.display='block';
  card.innerHTML=`
   <div class="head"><span class="chip" style="width:44px;height:44px;flex-basis:44px;background:rgba(57,230,255,0.10);border:1px solid rgba(57,230,255,0.35)">${svgIcon(A.icon,'#9fd4ff',30,'filter:drop-shadow(0 0 5px rgba(57,230,255,0.6))')}</span>
-   <div><div class="tn">${A.name}</div><div class="tier" style="color:var(--cyan)">Tactical ability</div></div></div>
+   <div><div class="tn">${A.name}</div><div class="tier" style="color:var(--cyan)">Tactical ability · Lv ${L}/${ABIL_MAX}</div></div></div>
+  <div class="lvlbar">${pips}</div>
   <div class="stats">
-   <div class="row"><span>Cost</span><b style="color:var(--accent)">${A.cost}</b></div>
-   <div class="row"><span>Cooldown</span><b>${A.cd}s</b></div>
+   <div class="row"><span>Use cost</span><b style="color:var(--accent)">${A.cost}</b></div>
+   <div class="row"><span>Cooldown</span><b>${abilCd(A).toFixed(0)}s</b></div>
+   ${cur.map((s,j)=>`<div class="row"><span>${s[0]}</span><b>${s[1]} ${!maxed&&nxt[j][1]!==s[1]?'<span class="up">▲'+nxt[j][1]+'</span>':''}</b></div>`).join('')}
   </div>
   <div class="bpHow">${A.info}</div>
-  <div class="bpHow" style="color:var(--good);border:none;margin-top:2px;">${IS_TOUCH?('Double-tap the '+A.name+' button to '+(A.aim?'arm it, then tap the battlefield to strike.':'unleash it.')):'Click the button to use it.'}</div>`;
+  <button class="btn go ${maxed||G.gold<uc?'disabled':''}" id="abUpBtn" style="width:100%;margin-top:6px;">${maxed?'MAX LEVEL':'⬆ UPGRADE — '+uc}</button>
+  <div class="bpHow" style="color:var(--good);border:none;margin-top:4px;">${IS_TOUCH?('Double-tap the '+A.name+' button to '+(A.aim?'arm it, then tap the battlefield.':'unleash it.')):'Click the button to use it.'}</div>`;
+ $('abUpBtn').onclick=()=>{
+  if(maxed||G.gold<uc)return;
+  G.gold-=uc;G.abilLvl[A.key]=L+1;sCoin();
+  toast(A.name+' upgraded to Lv '+(L+1));
+  renderAbilityInfo(card);refreshHUD();saveGame();
+ };
 }
 function buildAbilities(){
  const bar=$('abilities');bar.innerHTML='';
  ABILITIES.forEach((A,i)=>{
   const d=document.createElement('div');d.className='abil';d.id='ab'+i;
-  d.innerHTML=`${svgIcon(A.icon,'#9fd4ff',30,'filter:drop-shadow(0 0 5px rgba(57,230,255,0.6))')}<div class="an">${A.name}</div><div class="ac">${coinSVG(10)} ${A.cost}</div><div class="cd"></div><div class="cdt"></div>`;
+  d.innerHTML=`${svgIcon(A.icon,'#9fd4ff',30,'filter:drop-shadow(0 0 5px rgba(57,230,255,0.6))')}<div class="an">${A.name}</div><div class="ac">${coinSVG(10)} ${A.cost}</div><div class="alv" id="alv${i}"></div><div class="cd"></div><div class="cdt"></div>`;
   d.title=A.desc;
   d.onclick=()=>{
    ac();
@@ -1102,9 +1127,10 @@ function refreshAbilities(){
   const el=$('ab'+i);if(!el)return;
   const rem=Math.max(0,G.abilReady[A.key]-G.time),ready=rem<=0&&G.gold>=A.cost;
   el.classList.toggle('ready',ready&&!G.aiming);el.classList.toggle('cant',!ready);
-  el.querySelector('.cd').style.setProperty('--p',(rem/A.cd*360)+'deg');
+  el.querySelector('.cd').style.setProperty('--p',(rem/abilCd(A)*360)+'deg');
   el.querySelector('.cdt').textContent=rem>0?Math.ceil(rem):'';
   el.classList.toggle('sel',G.infoAbility===i);
+  const av=$('alv'+i);if(av){const L=abilLvl(A.key);av.innerHTML='<i></i>'.repeat(L-1);}
   el.style.outline=G.aiming===A.key?'2px solid #ff8a3c':'';
  });
 }
@@ -1235,6 +1261,7 @@ function saveGame(){
  if(!G||!G.running||G.over)return;
  try{localStorage.setItem(SAVE_KEY,JSON.stringify({v:1,theme:G.theme,diff:diffIdx,gold:Math.floor(G.gold),lives:G.lives,
   wave:G.waveActive?G.wave-1:G.wave,score:G.score,kills:G.kills,speed:G.speed,muted:G.muted,
+  abl:G.abilLvl,
   towers:G.towers.map(t=>({t:t.type,c:t.c,r:t.r,l:t.level,m:t.mode,dd:Math.floor(t.dmgDealt),k:t.kills})),
   cds:{strike:Math.max(0,G.abilReady.strike-G.time),freeze:Math.max(0,G.abilReady.freeze-G.time),rally:Math.max(0,G.abilReady.rally-G.time)}}));}catch(e){}
 }
@@ -1248,6 +1275,7 @@ function resumeGame(s){
  G.gold=s.gold||0;G.lives=s.lives||1;G.wave=s.wave||0;G.score=s.score||0;G.kills=s.kills||0;G.speed=s.speed||1;G.muted=!!s.muted;G.running=true;
  G.towers=(s.towers||[]).filter(o=>buildableCellFree(o.c,o.r)).map(o=>{const cc=cellCenter(o.c,o.r);return{type:clamp(o.t||0,0,TOWERS.length-1),c:o.c,r:o.r,x:cc.x,y:cc.y,level:clamp(o.l||1,1,MAX_LVL),cool:0,angle:-Math.PI/2,mode:o.m||'first',dmgDealt:o.dd||0,kills:o.k||0,flash:0};});
  if(s.cds)G.abilReady={strike:s.cds.strike||0,freeze:s.cds.freeze||0,rally:s.cds.rally||0};
+ if(s.abl)G.abilLvl={strike:clamp(s.abl.strike||1,1,ABIL_MAX),freeze:clamp(s.abl.freeze||1,1,ABIL_MAX),rally:clamp(s.abl.rally||1,1,ABIL_MAX)};
  menuTheme=G.theme;$('themeSel').value=G.theme;$('muteBtn').classList.toggle('on',!G.muted);
  onThemeChange();buildAbilities();updateWaveBtn();refreshChrome();
  $('startOverlay').classList.add('hidden');$('overOverlay').classList.add('hidden');
