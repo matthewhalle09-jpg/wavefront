@@ -83,6 +83,8 @@
   .selActs{display:flex;gap:6px;margin-top:6px;}
   .selActs .btn{flex:1;justify-content:center;}
   .btn.sell{background:linear-gradient(180deg,#a03a4f,#6a232f);}
+  #upBtn:not(.disabled){animation:upPulse 1.6s infinite;}
+  @keyframes upPulse{0%,100%{box-shadow:0 0 8px rgba(47,196,107,.3);}50%{box-shadow:0 0 20px rgba(47,196,107,.75);}}
 
   /* ---------- Bottom ---------- */
   #bottom{width:100%;display:flex;gap:10px;align-items:stretch;flex-wrap:wrap;}
@@ -409,21 +411,21 @@ function towerStat(t,lvlOverride){
  return s;
 }
 function towerDPS(t,L){const s=towerStat(t,L);let perHit=s.dmg*(1+s.crit*(s.critMult-1));let dps=perHit*s.multishot/s.rate;if(s.poisonDps)dps+=s.poisonDps;if(s.chains>1)dps*=1+(s.chains-1)*0.55;return dps;}
-function upgradeCost(t){return Math.round(TOWERS[t.type].cost*0.7*t.level*Math.pow(1.16,t.level-1));}
-function totalInvested(t){let c=TOWERS[t.type].cost;for(let l=1;l<t.level;l++)c+=Math.round(TOWERS[t.type].cost*0.7*l*Math.pow(1.16,l-1));return c;}
+function upgradeCost(t){return Math.round(TOWERS[t.type].cost*0.7*t.level*Math.pow(1.19,t.level-1));}
+function totalInvested(t){let c=TOWERS[t.type].cost;for(let l=1;l<t.level;l++)c+=Math.round(TOWERS[t.type].cost*0.7*l*Math.pow(1.19,l-1));return c;}
 
 /* ---------- ENEMIES ---------- */
-const BASEHP=44,BASESPD=52,BASERW=6;
+const BASEHP=44,BASESPD=52,BASERW=5;
 const KINDS={
  grunt:   {skin:'grunt', hp:1.0, spd:1.0, rw:1.0, dmg:1, size:27},
  runner:  {skin:'runner',hp:0.6, spd:1.85,rw:0.9, dmg:1, size:23},
  tank:    {skin:'tank',  hp:4.2, spd:0.6, rw:2.4, dmg:3, size:36},
- armored: {skin:'tank',  hp:3.0, spd:0.7, rw:2.7, dmg:2, size:33, armor:9, badge:'armor'},
+ armored: {skin:'tank',  hp:3.0, spd:0.7, rw:2.7, dmg:2, size:33, armor:7, badge:'armor'},
  shielded:{skin:'grunt', hp:1.0, spd:0.95,rw:1.9, dmg:1, size:28, shield:1.3, badge:'shield'},
  swarm:   {skin:'runner',hp:0.32,spd:2.1, rw:0.6, dmg:1, size:19},
  healer:  {skin:'grunt', hp:1.5, spd:0.85,rw:2.3, dmg:1, size:29, heal:true, badge:'heal'},
  splitter:{skin:'runner',hp:1.3, spd:1.05,rw:1.5, dmg:1, size:29, split:true, badge:'split'},
- boss:    {skin:'boss',  hp:32,  spd:0.5, rw:20,  dmg:14,size:52, armor:7, badge:'boss'},
+ boss:    {skin:'boss',  hp:38,  spd:0.5, rw:20,  dmg:14,size:52, armor:8, badge:'boss'},
 };
 
 /* ---------- ABILITIES / DIFFICULTY ---------- */
@@ -432,9 +434,9 @@ const ABILITIES=[
  {key:'freeze',name:'Cryo Nuke',icon:'ab_freeze',cost:110,cd:30,desc:'Freeze everything 2.5s'},
  {key:'rally', name:'War Rally',icon:'ab_rally', cost:95, cd:26,desc:'+70% fire rate for 6s'},
 ];
-const DIFF=[{k:'normal',n:'Recruit',hp:1.0,spd:0.95,gold:340,lives:25,sub:'Forgiving start'},
-            {k:'hard',  n:'Veteran',hp:1.0,spd:1.0, gold:300,lives:20,sub:'The real game'},
-            {k:'brutal',n:'Nightmare',hp:1.0,spd:1.08,gold:260,lives:15,sub:'For masochists'}];
+const DIFF=[{k:'normal',n:'Recruit',hp:0.9, spd:0.92,gold:340,lives:25,sub:'Forgiving start'},
+            {k:'hard',  n:'Veteran',hp:1.12,spd:1.0, gold:280,lives:18,sub:'The real game'},
+            {k:'brutal',n:'Nightmare',hp:1.22,spd:1.06,gold:260,lives:12,sub:'For masochists'}];
 
 /* ---------- PATH ---------- */
 const WPC=[[-1,1],[13,1],[13,3],[3,3],[3,5],[13,5],[13,7],[2,7],[2,9],[16,9]];
@@ -477,7 +479,7 @@ function makeEnemy(kindKey,opts){
  const e={kind:kindKey,name:sk.n,color:sk.c,skin:k.skin,badge:k.badge||'',seed:(enemySeq++)*1.7,fx:1,
   maxhp,hp:maxhp,baseSpeed:BASESPD*k.spd*Wv.spd,speed:BASESPD*k.spd*Wv.spd,
   reward:Math.max(1,Math.round(BASERW*k.rw*Wv.rw)),dmg:k.dmg,size:k.size*(opts.sizeMul||1),
-  armor:(k.armor||0)*(1+0.04*G.wave),wp:0,x:PATH[0].x,y:PATH[0].y,traveled:0,
+  armor:(k.armor||0)*(1+0.07*G.wave),wp:0,x:PATH[0].x,y:PATH[0].y,traveled:0,
   slowUntil:0,slowF:1,stunUntil:0,dots:[],isBoss:kindKey==='boss',
   shield:0,shieldMax:0,shieldRegenAt:0,heal:!!k.heal,healCd:0,split:!!k.split&&!opts.isChild,isChild:!!opts.isChild};
  if(k.shield){e.shieldMax=maxhp*k.shield;e.shield=e.shieldMax;}
@@ -488,19 +490,19 @@ function makeEnemy(kindKey,opts){
 /* ---------- waves ---------- */
 function buildWaveList(w){
  const list=[],push=(k,n)=>{for(let i=0;i<n;i++)list.push(k);};
- push('grunt',5+Math.floor(w*1.3));
- if(w>=2)push('runner',2+Math.floor(w*0.7));
- if(w>=3)push('swarm',Math.floor(w*0.8));
- if(w>=4)push('armored',Math.floor(w*0.4));
- if(w>=6)push('shielded',Math.floor(w*0.5));
- if(w>=8)push('healer',1+Math.floor(w*0.18));
- if(w>=10)push('splitter',1+Math.floor(w*0.28));
- if(w>=5&&w%5!==0)push('tank',Math.floor(w*0.3));
+ push('grunt',5+Math.floor(w*1.5));
+ if(w>=2)push('runner',2+Math.floor(w*0.8));
+ if(w>=3)push('swarm',Math.floor(w*1.0));
+ if(w>=3)push('armored',Math.floor(w*0.5));
+ if(w>=5)push('shielded',Math.floor(w*0.55));
+ if(w>=7)push('healer',1+Math.floor(w*0.22));
+ if(w>=9)push('splitter',1+Math.floor(w*0.3));
+ if(w>=5&&w%5!==0)push('tank',Math.floor(w*0.35));
  for(let i=list.length-1;i>0;i--){const j=((i*1103515245+12345)>>>0)%(i+1);[list[i],list[j]]=[list[j],list[i]];}
- if(w%5===0){const bn=w%10===0?2:1;for(let i=0;i<bn;i++)list.push('boss');}
+ if(w%5===0){const bn=(w>=20&&w%10===0)?2:1;for(let i=0;i<bn;i++)list.push('boss');}
  return list;
 }
-function waveScale(w){return{hp:Math.pow(1.16,w-1)*G.diff.hp,spd:Math.min(1.75,1+0.012*w)*G.diff.spd,rw:1+0.035*w};}
+function waveScale(w){return{hp:Math.pow(1.215,w-1)*G.diff.hp,spd:Math.min(1.9,1+0.014*w)*G.diff.spd,rw:1+0.018*w};}
 function startWave(){
  if(G.waveActive||G.over)return;
  G.wave++;G.wScale=waveScale(G.wave);G.spawnQueue=buildWaveList(G.wave);G.spawnTimer=0;G.waveActive=true;
@@ -520,7 +522,7 @@ function update(dt){
  if(G.bannerT>0)G.bannerT-=dt;
  if(G.shake>0)G.shake=Math.max(0,G.shake-dt*60);
 
- if(G.waveActive&&G.spawnQueue.length){G.spawnTimer-=dt;if(G.spawnTimer<=0){const boss=G.spawnQueue[0]==='boss';spawnNext();G.spawnTimer=boss?0.8:0.5;}}
+ if(G.waveActive&&G.spawnQueue.length){G.spawnTimer-=dt;if(G.spawnTimer<=0){const boss=G.spawnQueue[0]==='boss';spawnNext();G.spawnTimer=boss?0.8:(G.spawnQueue.length>24?0.38:0.48);}}
 
  for(let i=G.enemies.length-1;i>=0;i--){
   const e=G.enemies[i];
@@ -570,7 +572,7 @@ function update(dt){
 
  if(G.waveActive&&!G.spawnQueue.length&&!G.enemies.length){
   G.waveActive=false;
-  const bonus=35+G.wave*8,interest=Math.min(120,Math.floor(G.gold*0.06));
+  const bonus=24+G.wave*6,interest=Math.min(80,Math.floor(G.gold*0.05));
   G.gold+=bonus+interest;G.score+=G.wave*20;
   G.banner='WAVE CLEAR  +'+(bonus+interest)+' GOLD';G.bannerColor='#ffcf4d';G.bannerT=2;sWin();
   updateWaveBtn();buildNextWavePreview();
@@ -764,6 +766,13 @@ function drawTower(t){
   ctx.fillStyle=fg;ctx.beginPath();ctx.arc(fx,fy,11,0,TAU);ctx.fill();
  }
  for(let i=0;i<t.level;i++){ctx.fillStyle=TIER_COLORS[tierOf(i+1)];ctx.fillRect(t.x-15+i*3.1,t.y+13.5,2.2,3.6);}
+ // upgrade-available chevron
+ if(t.level<MAX_LVL&&G.gold>=upgradeCost(t)&&G.selectedTower!==t){
+  const by=t.y-30+Math.sin(G.time*5+t.x*0.1)*2.6;
+  ctx.fillStyle='#ffcf4d';ctx.strokeStyle='rgba(20,14,0,0.8)';ctx.lineWidth=1.4;
+  ctx.beginPath();ctx.moveTo(t.x,by-5);ctx.lineTo(t.x+5.5,by+1.5);ctx.lineTo(t.x+2.4,by+1.5);ctx.lineTo(t.x+2.4,by+5);ctx.lineTo(t.x-2.4,by+5);ctx.lineTo(t.x-2.4,by+1.5);ctx.lineTo(t.x-5.5,by+1.5);ctx.closePath();
+  ctx.stroke();ctx.fill();
+ }
 }
 
 function drawBadge(e,bx,by){
