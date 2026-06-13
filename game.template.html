@@ -548,16 +548,32 @@ const DIFF=[{k:'normal',n:'Recruit',hp:0.9, spd:0.92,gold:340,lives:25,sub:'Forg
             {k:'hard',  n:'Veteran',hp:1.12,spd:1.0, gold:280,lives:18,sub:'The real game'},
             {k:'brutal',n:'Nightmare',hp:1.22,spd:1.06,gold:260,lives:12,sub:'For masochists'}];
 
-/* ---------- PATH ---------- */
-const WPC=[[-1,1],[13,1],[13,3],[3,3],[3,5],[13,5],[13,7],[2,7],[2,9],[16,9]];
-const PATH=WPC.map(([c,r])=>({x:c*TILE+TILE/2,y:r*TILE+TILE/2}));
-const pathCells=new Set();
-(function(){for(let i=0;i<WPC.length-1;i++){let[c1,r1]=WPC[i],[c2,r2]=WPC[i+1];const dc=Math.sign(c2-c1),dr=Math.sign(r2-r1);let c=c1,r=r1;while(c!==c2||r!==r2){if(c>=0&&c<COLS&&r>=0&&r<ROWS)pathCells.add(c+','+r);c+=dc;r+=dr;}if(c2>=0&&c2<COLS&&r2>=0&&r2<ROWS)pathCells.add(c2+','+r2);}})();
+/* ---------- MAPS: a hand-crafted path per universe ---------- */
+const MAPS={
+ mid:[[-1,1],[13,1],[13,3],[3,3],[3,5],[13,5],[13,7],[2,7],[2,9],[16,9]],
+ sci:[[-1,8],[1,8],[1,1],[3,1],[3,8],[5,8],[5,1],[7,1],[7,8],[9,8],[9,1],[11,1],[11,8],[13,8],[13,4],[16,4]],
+ cav:[[-1,0],[14,0],[14,8],[1,8],[1,2],[11,2],[11,6],[4,6],[4,4],[8,4]],
+ zom:[[-1,5],[4,5],[4,1],[9,1],[9,7],[13,7],[13,3],[1,3],[1,9],[16,9]],
+ pir:[[-1,9],[6,9],[6,7],[14,7],[14,5],[1,5],[1,3],[9,3],[9,1],[16,1]],
+ wes:[[-1,7],[12,7],[12,4],[3,4],[3,1],[16,1]],
+ nin:[[-1,0],[15,0],[15,9],[2,9],[2,3],[12,3],[12,6],[6,6]],
+ ice:[[-1,0],[4,0],[4,3],[8,3],[8,0],[12,0],[12,4],[2,4],[2,7],[7,7],[7,9],[16,9]],
+ egy:[[-1,9],[14,9],[14,6],[1,6],[1,3],[12,3],[12,0],[16,0]],
+ cyb:[[-1,3],[8,3],[8,8],[2,8],[2,1],[12,1],[12,6],[16,6]],
+};
+let PATH=[],pathCells=new Set();
+function buildMap(id){
+ const wpc=MAPS[id]||MAPS.mid;
+ PATH=wpc.map(([c,r])=>({x:c*TILE+TILE/2,y:r*TILE+TILE/2}));
+ pathCells=new Set();
+ for(let i=0;i<wpc.length-1;i++){let[c1,r1]=wpc[i],[c2,r2]=wpc[i+1];const dc=Math.sign(c2-c1),dr=Math.sign(r2-r1);let c=c1,r=r1;while(c!==c2||r!==r2){if(c>=0&&c<COLS&&r>=0&&r<ROWS)pathCells.add(c+','+r);c+=dc;r+=dr;}if(c2>=0&&c2<COLS&&r2>=0&&r2<ROWS)pathCells.add(c2+','+r2);}
+}
+buildMap('mid');
 function buildable(c,r){return c>=0&&c<COLS&&r>=0&&r<ROWS&&!pathCells.has(c+','+r)&&!G.towers.some(t=>t.c===c&&t.r===r);}
 
 /* ---------- STATE ---------- */
 let G,diffIdx=1,enemySeq=0;
-function freshState(){return{theme:0,diff:DIFF[diffIdx],gold:DIFF[diffIdx].gold,lives:DIFF[diffIdx].lives,wave:0,score:0,kills:0,
+function freshState(){return{theme:0,map:'mid',diff:DIFF[diffIdx],gold:DIFF[diffIdx].gold,lives:DIFF[diffIdx].lives,wave:0,score:0,kills:0,
  towers:[],enemies:[],projs:[],parts:[],floats:[],bolts:[],rings:[],spawnQueue:[],spawnTimer:0,wScale:{hp:1,spd:1,rw:1},
  waveActive:false,running:false,over:false,paused:false,selectedShop:-1,selectedTower:null,infoAbility:null,hoverCell:null,abilLvl:{strike:1,freeze:1,rally:1},
  speed:1,muted:false,time:0,shake:0,banner:null,bannerT:0,bannerColor:'#fff',rallyUntil:0,aiming:null,abilReady:{strike:0,freeze:0,rally:0}};}
@@ -956,8 +972,8 @@ function render(){
 
  // spawn portal & base
  const first=PATH[0],last=PATH[PATH.length-1];
- drawSprite('ui_portal',clamp(first.x,20,W-20),first.y,40,{c1:shade(theme().accent,0.4),c2:theme().accent,outline:'rgba(0,0,0,0.5)',glow:rgba(theme().accent,0.8)},false,G.time*0.8);
- drawSprite('ui_castle',clamp(last.x,22,W-22),last.y,42,{c1:'#f2e6c8',c2:'#b09a6a',outline:'rgba(0,0,0,0.6)',glow:'rgba(255,207,77,0.5)'});
+ drawSprite('ui_portal',clamp(first.x,20,W-20),clamp(first.y,22,H-22),40,{c1:shade(theme().accent,0.4),c2:theme().accent,outline:'rgba(0,0,0,0.5)',glow:rgba(theme().accent,0.8)},false,G.time*0.8);
+ drawSprite('ui_castle',clamp(last.x,22,W-22),clamp(last.y,24,H-24),42,{c1:'#f2e6c8',c2:'#b09a6a',outline:'rgba(0,0,0,0.6)',glow:'rgba(255,207,77,0.5)'});
 
  // placement preview (pending drag-cell wins over hover)
  const previewCell=(G.selectedShop>=0)&&(G.pendingCell||G.hoverCell);
@@ -1463,7 +1479,7 @@ async function refreshMenuLb(){
 const SAVE_KEY='wavefront_save_v1',BEST_KEY='wavefront_best_v1';
 function saveGame(){
  if(!G||!G.running||G.over)return;
- try{localStorage.setItem(SAVE_KEY,JSON.stringify({v:1,theme:G.theme,diff:diffIdx,gold:Math.floor(G.gold),lives:G.lives,
+ try{localStorage.setItem(SAVE_KEY,JSON.stringify({v:1,theme:G.theme,map:G.map,diff:diffIdx,gold:Math.floor(G.gold),lives:G.lives,
   wave:G.waveActive?G.wave-1:G.wave,score:G.score,kills:G.kills,speed:G.speed,muted:G.muted,
   abl:G.abilLvl,
   towers:G.towers.map(t=>({t:t.type,c:t.c,r:t.r,l:t.level,m:t.mode,dd:Math.floor(t.dmgDealt),k:t.kills})),
@@ -1476,6 +1492,8 @@ function recordBest(){try{const b=loadBest(),k=DIFF[diffIdx].k;if(!b[k]||G.wave>
 function resumeGame(s){
  diffIdx=clamp(s.diff||1,0,DIFF.length-1);
  G=freshState();G.theme=clamp(s.theme||0,0,THEMES.length-1);
+ G.map=MAPS[s.map]?s.map:THEMES[G.theme].id;
+ buildMap(G.map);
  G.gold=s.gold||0;G.lives=s.lives||1;G.wave=s.wave||0;G.score=s.score||0;G.kills=s.kills||0;G.speed=s.speed||1;G.muted=!!s.muted;G.running=true;
  G.towers=(s.towers||[]).filter(o=>buildableCellFree(o.c,o.r)).map(o=>{const cc=cellCenter(o.c,o.r);return{type:clamp(o.t||0,0,TOWERS.length-1),c:o.c,r:o.r,x:cc.x,y:cc.y,level:clamp(o.l||1,1,MAX_LVL),cool:0,angle:-Math.PI/2,mode:o.m||'first',dmgDealt:o.dd||0,kills:o.k||0,flash:0};});
  if(s.cds)G.abilReady={strike:s.cds.strike||0,freeze:s.cds.freeze||0,rally:s.cds.rally||0};
@@ -1500,7 +1518,7 @@ $('pauseBtn').onclick=()=>{ac();setPaused(!G.paused);};
 $('speedBtn').onclick=()=>{G.speed=G.speed===1?2:G.speed===2?3:1;refreshChrome();saveGame();};
 $('muteBtn').onclick=()=>{G.muted=!G.muted;$('muteBtn').classList.toggle('on',!G.muted);refreshChrome();saveGame();};
 $('menuBtn').onclick=()=>{if(G.running&&!G.over)setPaused(true);openStart();};
-$('themeSel').onchange=e=>{G.theme=+e.target.value;onThemeChange();toast('Universe: '+theme().name);saveGame();};
+$('themeSel').onchange=e=>{G.theme=+e.target.value;onThemeChange();toast(G.running?'Reskinned to '+theme().name+' \u2014 map stays this run':'Universe: '+theme().name);saveGame();};
 function onThemeChange(){buildBackground();initAmb();buildShop();renderSel();buildNextWavePreview();refreshHUD();updatePlaceBar();}
 window.addEventListener('keydown',e=>{
  if(e.key==='Escape'){G.selectedShop=-1;G.selectedTower=null;G.aiming=null;G.infoAbility=null;clearPending();renderSel();refreshHUD();}
@@ -1545,7 +1563,8 @@ $('resumeBtn').onclick=()=>{
 };
 function newGame(){
  clearSave();
- G=freshState();G.theme=menuTheme;G.running=true;
+ G=freshState();G.theme=menuTheme;G.map=THEMES[menuTheme].id;G.running=true;
+ buildMap(G.map);
  $('themeSel').value=G.theme;$('muteBtn').classList.add('on');
  onThemeChange();buildAbilities();updateWaveBtn();refreshChrome();
  $('startOverlay').classList.add('hidden');$('overOverlay').classList.add('hidden');
