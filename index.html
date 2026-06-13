@@ -172,6 +172,8 @@
   .lbRow.top{background:rgba(255,207,77,.06);}
   .lbRow.meRun{outline:1.5px solid var(--cyan);border-radius:7px;background:rgba(57,230,255,.10);}
   .lbRow .df{font-size:9px;font-weight:900;width:12px;text-align:center;opacity:.9;}
+  .lbRow .ti{width:16px;display:flex;align-items:center;justify-content:center;flex:0 0 16px;}
+  .lbThemeSel{width:100%;background:var(--panel2);border:1px solid var(--line);border-radius:7px;color:#fff;font-size:10px;font-weight:700;padding:4px 6px;margin-bottom:6px;}
   @media (orientation:landscape) and (max-height:580px){
     .pfBox{padding:14px 18px;}
     .pfBox h2{font-size:15px;}
@@ -1402,13 +1404,16 @@ async function claimProfile(name,pin){
 /* ----- rendering ----- */
 const RANK_C=['#ffd24a','#c0c8d8','#d8915a'];
 const DIFF_TAG={normal:['R','#46e08a'],hard:['V','#39a6ff'],brutal:['N','#ff4d6d']};
+function themeById(id){return THEMES.find(t=>t.id===id);}
 function lbListHTML(list,myId,meName,maxH,showDiff){
- if(!list.length)return '<div class="lbNote">No runs yet \u2014 be the first on the board!</div>';
+ if(!list.length)return '<div class="lbNote">No runs on this sheet yet \u2014 be the first!</div>';
  return '<div class="lbScroll" style="max-height:'+(maxH||180)+'px;">'+list.map((r,i)=>{
   const cls='lbRow'+(i<5?' top':'')+(myId&&r.id===myId?' meRun':'')+((meName&&r.name&&r.name.toLowerCase()===meName.toLowerCase())?' me':'');
   const rkStyle=i<3?' style="color:'+RANK_C[i]+'"':'';
   const tag=showDiff&&DIFF_TAG[r.diff]?'<span class="df" style="color:'+DIFF_TAG[r.diff][1]+'">'+DIFF_TAG[r.diff][0]+'</span>':'';
-  return '<div class="'+cls+'"><span class="rk"'+rkStyle+'>'+(i+1)+'</span><span class="nm">'+esc(r.name)+'</span>'+tag+'<span class="wv">w'+r.wave+'</span><span class="sc">'+r.score+'</span></div>';
+  const th=themeById(r.theme);
+  const ti=th?'<span class="ti">'+svgIcon(th.id+'_boss',th.enemies.boss.c,13)+'</span>':'';
+  return '<div class="'+cls+'"><span class="rk"'+rkStyle+'>'+(i+1)+'</span>'+ti+'<span class="nm">'+esc(r.name)+'</span>'+tag+'<span class="wv">w'+r.wave+'</span><span class="sc">'+r.score+'</span></div>';
  }).join('')+'</div>';
 }
 function showProfileOverlay(){
@@ -1427,18 +1432,22 @@ $('pfGo').onclick=async()=>{
  refreshMenuLb();
 }
 $('pfPin').addEventListener('keydown',e=>{if(e.key==='Enter')$('pfGo').click();});
-let menuLbDiff=-1; // -1 = Best Overall
+let menuLbDiff=-1,menuLbTheme='all'; // -1 = Best Overall, 'all' = every universe
 function overallList(lists){const m={};for(const l of lists)for(const r of l)if(r&&r.id)m[r.id]=r;return Object.values(m).sort((x,y)=>y.score-x.score||x.when-y.when);}
+function themeFilter(list){return menuLbTheme==='all'?list:list.filter(r=>r.theme===menuLbTheme);}
 async function refreshMenuLb(){
  const me=getMe();
  $('playingAs').innerHTML=me?('Playing as <b>'+esc(me.name)+'</b> \u00b7 <a id="switchPl">switch player</a>'):'';
  const sw=$('switchPl');if(sw)sw.onclick=()=>showProfileOverlay();
  const sel=menuLbDiff,panel=$('menuLb');
  const tabs='<div class="lbTabs"><button data-i="-1" class="'+(sel===-1?'on':'')+'">Overall</button>'+DIFF.map((d,i)=>'<button data-i="'+i+'" class="'+(i===sel?'on':'')+'">'+d.n+'</button>').join('')+'</div>';
+ const themeSel='<select class="lbThemeSel"><option value="all">All universes</option>'+THEMES.map(t=>'<option value="'+t.id+'"'+(menuLbTheme===t.id?' selected':'')+'>'+t.name+'</option>').join('')+'</select>';
+ const sheetName=(menuLbTheme==='all'?'':themeById(menuLbTheme).name+' \u00b7 ')+(sel===-1?'Best Overall':DIFF[sel].n);
  const paint=list=>{
   panel.style.display='block';
-  panel.innerHTML='<h4><span>'+(sel===-1?'Best Overall \u2014 every run counts':DIFF[sel].n+' board \u2014 every run counts')+'</span></h4>'+tabs+lbListHTML(list,null,me&&me.name,160,sel===-1);
+  panel.innerHTML='<h4><span>'+sheetName+' \u2014 every run counts</span></h4>'+tabs+themeSel+lbListHTML(themeFilter(list),null,me&&me.name,150,sel===-1);
   panel.querySelectorAll('.lbTabs button').forEach(b=>b.onclick=()=>{menuLbDiff=+b.dataset.i;refreshMenuLb();});
+  const ts=panel.querySelector('.lbThemeSel');if(ts)ts.onchange=()=>{menuLbTheme=ts.value;refreshMenuLb();};
  };
  if(sel===-1){
   paint(overallList(DIFF.map(d=>cachedRuns(d.k))));
@@ -1555,10 +1564,13 @@ function gameOver(){
  if(me&&G.score>0){
   const run={id:Date.now().toString(36)+Math.random().toString(36).slice(2,7),name:me.name,score:G.score,wave:G.wave,diff:G.diff.k,theme:theme().id,when:Date.now()};
   syncRuns(G.diff.k,run).then(res=>{
-   const list=res.list,idx=list.findIndex(r=>r.id===run.id);
+   const sheet=res.list.filter(r=>r.theme===run.theme);
+   const idx=sheet.findIndex(r=>r.id===run.id);
+   const allIdx=res.list.findIndex(r=>r.id===run.id);
    let html='';
-   if(idx>=0)html+='<div class="rkHead">RANK <b>#'+(idx+1)+'</b> of '+list.length+' \u00b7 '+G.diff.n+'</div>';
-   html+='<div class="lbPanel" style="margin-bottom:0;"><h4><span>'+G.diff.n+' board \u2014 every run counts</span></h4>'+lbListHTML(list,run.id,me.name,150)+'</div>';
+   if(idx>=0)html+='<div class="rkHead">RANK <b>#'+(idx+1)+'</b> of '+sheet.length+' \u00b7 '+theme().name+' \u00b7 '+G.diff.n+'</div>';
+   if(allIdx>=0&&sheet.length!==res.list.length)html+='<div class="lbNote" style="margin:0 0 5px;">#'+(allIdx+1)+' of '+res.list.length+' across all '+G.diff.n+' runs</div>';
+   html+='<div class="lbPanel" style="margin-bottom:0;"><h4><span>'+theme().name+' \u00b7 '+G.diff.n+' sheet</span></h4>'+lbListHTML(sheet,run.id,me.name,150)+'</div>';
    if(!res.synced)html+='<div class="lbNote">Offline \u2014 saved locally, will sync next time.</div>';
    $('rankBox').innerHTML=html;
    const mine=$('rankBox').querySelector('.meRun');if(mine)mine.scrollIntoView({block:'center'});
@@ -1569,7 +1581,7 @@ $('playBtn').onclick=()=>{ac();newGame();};
 $('againBtn').onclick=()=>openStart();
 
 /* ---------- self-update: never let a phone run a stale cached version ---------- */
-const BUILD='mqbm7hsz';
+const BUILD='mqbn4x5x';
 let updateNagged=false;
 async function checkVersion(){
  if(location.protocol==='file:')return;
