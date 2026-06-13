@@ -136,3 +136,29 @@ Every step ships independently to the live URL; the bot-playtest harness re-vali
 ---
 
 *Plan lives at `docs/MASTER_PLAN.md` in the wavefront repo. Game: https://matthewhalle09-jpg.github.io/wavefront/*
+
+
+---
+
+## 8. v1.1 — Reviewer integration (LOCKED build order)
+
+An external AI review (2026-06-13) was adopted nearly wholesale. Key changes from v1.0:
+
+**Locked order:**
+1. **Phase 0 — engine seams** (config-driven maps/waves/bosses/damage-types, save versioning, debug spawning, bot harness as first-class tool)
+2. **Maps for all 10 universes** *(exception to vertical-slice rule: pure config data, satisfies the loudest player complaint, and per-universe leaderboard sheets isolate fairness)*
+3. **Vertical slice: CYBERPUNK** — gimmick (firewall gates = active decision), signature tower (Hack Node), enemy mechanic (EMP on death), scripted boss (Megacore spawns adds), 20-wave campaign w/ stars, small XP loop. Acceptance: "feels like a real level, not a reskin."
+4. Branching upgrades (L5 role choice, L8 capstone) BEFORE damage matrix; damage types simplified to 3 (kinetic/energy/blast), one clear weakness per enemy, icon-first UI
+5. Small meta-progression EARLY (stars → capped perks; XP on all runs) — **leaderboard fairness rule: daily challenge & competitive sheets are perk-normalized**
+6. Heroes DELAYED — prototype one in the slice; cut to "commander abilities" if clunky on phone
+7. Scale pattern to remaining 9 universes
+8. Daily challenge + proportional anti-cheat (run IDs, seeds, stat plausibility, replay hash for top-10)
+9. Presentation pass (juice → SFX → decoration → music → commissioned art last)
+10. **IP renames NOW** (Middle-earth→Elderwood, Balrog→Emberlord, Mirkwood→Darkwood) — before public identity hardens
+11. Store packaging (Capacitor; verified: Apple $99/yr, Google $25 once — **requires Matthew's approval before any spend**)
+
+**Monetization locked:** free download, 3 universes free, one unlock IAP ($3.99 early → $4.99 when campaign+dailies+10 distinct universes exist), no ads, no consumables, no pay-to-win.
+
+**Adopted as critical additions:** first-run tutorial, UI clarity for every mechanic, save migration/versioning, lightweight private telemetry, performance budget on older phones, colorblind-safe (icons+shapes not color alone), store-readiness checklist.
+
+**Gimmick design rule (adopted):** every map gimmick must create a *decision*, not just a penalty. (Sandstorm health-bar hiding: cut. Meteor craters: redesigned to telegraph the tile a wave in advance.)
