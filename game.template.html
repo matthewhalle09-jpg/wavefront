@@ -1547,12 +1547,36 @@ function gameOver(){
 $('playBtn').onclick=()=>{ac();newGame();};
 $('againBtn').onclick=()=>openStart();
 
+/* ---------- self-update: never let a phone run a stale cached version ---------- */
+const BUILD='__BUILD__';
+let updateNagged=false;
+async function checkVersion(){
+ if(location.protocol==='file:')return;
+ try{
+  const r=await fetch('version.txt?b='+Date.now(),{cache:'no-store'});
+  if(!r.ok)return;
+  const v=(await r.text()).trim();
+  if(!v||v===BUILD)return;
+  if(!G.running||G.over||G.paused){saveGame();toast('Updating to the latest version\u2026');setTimeout(()=>location.replace(location.pathname+'?v='+encodeURIComponent(v)),900);}
+  else if(!updateNagged){updateNagged=true;toast('New version ready \u2014 updates after this run');}
+ }catch(e){}
+}
+async function ensureProfile(){
+ const me=getMe();if(!me)return;
+ const prof=await kvGet('profiles');if(prof===null)return;
+ const p=prof.missing?{}:prof,k=me.name.toLowerCase();
+ if(!p[k]){p[k]={name:me.name,pin:me.pinHash,when:Date.now()};kvPut('profiles',p);}
+}
+
 /* ---------- boot ---------- */
 G=freshState();
 buildMenu();onThemeChange();buildAbilities();updateWaveBtn();refreshChrome();
-migrateV1();flushPending();
+migrateV1();flushPending();ensureProfile();
 refreshMenuLb();
 if(!getMe())showProfileOverlay();
+checkVersion();
+document.addEventListener('visibilitychange',()=>{if(!document.hidden)checkVersion();});
+setInterval(checkVersion,180000);
 requestAnimationFrame(loop);
 </script>
 </body>
