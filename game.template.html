@@ -258,22 +258,42 @@
     #selCard .modeHint{font-size:8.5px;margin:0 0 4px;}
     #selCard .bpHow{font-size:9px;padding-top:4px;line-height:1.4;}
     #selCard .selActs .btn{font-size:10.5px;padding:6px 4px;}
-    /* start menu fits without scroll */
-    .menu{padding:10px 8px 14px;}
-    .logo{font-size:32px;}
-    .tag{font-size:10px;margin:2px 0 10px;letter-spacing:2px;}
-    .diffRow{gap:6px;margin-bottom:8px;}
-    .diffBtn{padding:5px 12px;font-size:12px;}
-    .diffBtn small{font-size:8.5px;}
-    .themeGrid{grid-template-columns:repeat(5,1fr);gap:6px;margin-bottom:10px;max-width:560px;}
-    .themeCard{padding:6px 2px 5px;border-radius:10px;}
-    .themeCard svg{width:28px !important;height:28px !important;}
-    .themeCard .tn{font-size:8px;margin-top:3px;}
+    /* start menu: two-column landscape layout — fits one screen, no page scroll */
+    .overlay{overflow:hidden;}
+    #startOverlay .menu{
+      display:grid;gap:2px 14px;padding:8px 12px;width:min(880px,97vw);max-height:100vh;max-height:100dvh;
+      grid-template-columns:minmax(0,1fr) clamp(230px,38vw,300px);
+      grid-template-rows:auto auto auto auto auto auto auto minmax(0,1fr);
+      grid-template-areas:"logo lb" "tag lb" "pa lb" "best lb" "resume lb" "diff lb" "themes lb" "play lb";
+      align-content:center;text-align:center;
+    }
+    #startOverlay .logo{grid-area:logo;font-size:24px;margin:0;}
+    #startOverlay .tag{grid-area:tag;font-size:8px;margin:0 0 3px;letter-spacing:2px;}
+    #startOverlay .playingAs{grid-area:pa;margin:0;font-size:11px;}
+    #startOverlay .bestLine{grid-area:best;margin:0;font-size:9.5px;min-height:0;}
+    #resumeRow{grid-area:resume;margin:3px 0 0;}
+    #resumeRow .bigBtn{font-size:12px;padding:7px 18px;}
+    #startOverlay .diffRow{grid-area:diff;gap:5px;margin:5px 0 0;}
+    .diffBtn{padding:4px 10px;font-size:11px;}
+    .diffBtn small{font-size:8px;}
+    #startOverlay .themeGrid{grid-area:themes;grid-template-columns:repeat(5,1fr);gap:5px;margin:6px 0 0;max-width:none;}
+    .themeCard{padding:5px 2px 4px;border-radius:9px;}
+    .themeCard svg{width:24px !important;height:24px !important;}
+    .themeCard .tn{font-size:7.5px;margin-top:2px;}
+    #playBtn{grid-area:play;justify-self:center;align-self:start;margin-top:7px;}
     .bigBtn{font-size:14px;padding:9px 28px;letter-spacing:2px;}
+    #menuLb{grid-area:lb;display:flex !important;flex-direction:column;margin:0;min-height:0;align-self:stretch;}
+    #menuLb .lbScroll{max-height:none !important;flex:1;min-height:0;}
+    #menuLb[style*="display: none"]{visibility:hidden;}
     .howto,.credits{display:none;}
-    .resultBig{font-size:30px;}
-    .resultStats{font-size:13px;margin:4px 0 12px;}
-    #overIcon svg{width:54px !important;height:54px !important;}
+    /* game over fits too */
+    .resultBig{font-size:26px;margin:4px 0 2px;}
+    .resultStats{font-size:12px;margin:2px 0 6px;line-height:1.5;}
+    #overIcon svg{width:44px !important;height:44px !important;}
+    .rkHead{font-size:15px;margin-bottom:3px;}
+    #rankBox{margin:2px 0 8px;}
+    #rankBox .lbScroll{max-height:92px !important;}
+    #rankBox .lbPanel{padding:5px 8px;}
   }
   @media (orientation:landscape) and (max-height:580px) and (max-width:760px){
     #themeSel{display:none;}
