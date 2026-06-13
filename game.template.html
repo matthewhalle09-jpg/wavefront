@@ -62,6 +62,8 @@
   .shopBtn:hover{filter:brightness(1.2);transform:translateY(-1px);}
   .shopBtn.sel{outline:2px solid var(--accent);box-shadow:0 0 16px rgba(255,207,77,.45);}
   .shopBtn.cant{opacity:.42;}
+  .shopBtn.sigBtn{border-color:rgba(57,230,255,.5);box-shadow:0 0 12px rgba(57,230,255,.2) inset;}
+  .shopBtn .nm em{color:var(--cyan);font-style:normal;}
   .shopBtn .top{display:flex;align-items:center;gap:7px;width:100%;}
   .chip{flex:0 0 34px;width:34px;height:34px;border-radius:9px;display:flex;align-items:center;justify-content:center;}
   .shopBtn .nm{font-weight:800;font-size:12px;line-height:1.12;flex:1;}
@@ -477,7 +479,7 @@ const THEMES=[
   towers:[{n:'Anubis Guard',p:'#ffe066'},{n:'Pyramid Core',p:'#ffb03c'},{n:'Scarab Swarm',p:'#7fe6d0'},{n:'Eye of Horus',p:'#ffd24a'},{n:'Cobra Shrine',p:'#aaff6a'},{n:'Wrath of Ra',p:'#ffaa3c'}],
   enemies:{grunt:{n:'Mummy',c:'#d8c89a'},runner:{n:'Gold Scarab',c:'#5ad0a0'},tank:{n:'Sphinx',c:'#caa050'},boss:{n:'Horus Reborn',c:'#ffd24a'}}},
  {id:'cyb',name:'Cyberpunk',bg:['#2a1040','#1a0a2c','#080414'],ground:'#1e0e30',ground2:'#241238',path:'#c42a7a',pathEdge:'#6a1844',accent:'#ff3ca0',amb:{type:'neon',color:'#ff3ca0'},
-  towers:[{n:'Auto-Turret',p:'#3cffd0'},{n:'EMP Mortar',p:'#ff8a3c'},{n:'Nano Freeze',p:'#9fe6ff'},{n:'Target Laser',p:'#ff3ca0'},{n:'Nanovirus',p:'#9aff3a'},{n:'Tesla Node',p:'#5ad0ff'}],
+  towers:[{n:'Auto-Turret',p:'#3cffd0'},{n:'EMP Mortar',p:'#ff8a3c'},{n:'Nano Freeze',p:'#9fe6ff'},{n:'Target Laser',p:'#ff3ca0'},{n:'Nanovirus',p:'#9aff3a'},{n:'Tesla Node',p:'#5ad0ff'},{n:'Hack Node',p:'#3cffd0'}],
   enemies:{grunt:{n:'Sec-Bot',c:'#3cffd0'},runner:{n:'Mono-Wheel',c:'#ff6ad0'},tank:{n:'Battle Mech',c:'#7a9aff'},boss:{n:'Megacore',c:'#ff3ca0'}}},
 ];
 
@@ -489,11 +491,32 @@ const TOWERS=[
  {key:'sniper',cost:170, base:{range:300,dmg:82,rate:1.5, splash:0, slow:0},   trait:'sniper', desc:'Huge range, pierces armor'},
  {key:'poison',cost:115, base:{range:120,dmg:9, rate:0.7, splash:0, slow:0},   trait:'poison', desc:'Stacking DoT, ignores armor'},
  {key:'tesla', cost:150, base:{range:145,dmg:18,rate:0.8, splash:0, slow:0},   trait:'tesla',  desc:'Chain lightning'},
+ {key:'hack',  cost:170, base:{range:135,dmg:18,rate:2.7, splash:0, slow:0},   trait:'hack', icon:'cyb_hack', name:'Hack Node', pc:'#3cffd0', desc:'Hacks a foe to fight for you'},
 ];
+const SIG_INDEX=6; // signature tower index in TOWERS
 const MAX_LVL=10;
 const TIER_NAMES=['Standard','Standard','Veteran','Veteran','Elite','Elite','Master','Master','Legendary','Legendary'];
 const TIER_COLORS=['#8b95a8','#46e08a','#39a6ff','#b06aff','#ffcf4d'];
 const tierOf=L=>L<=2?0:L<=4?1:L<=6?2:L<=8?3:4;
+
+/* ============================================================
+   PER-UNIVERSE IDENTITY (only cyb populated so far — others
+   behave exactly as before). Each universe can define:
+     sig        : index in TOWERS of its signature tower
+     empDeath   : 'big' enemies fry the nearest tower on death
+     bossAdds   : {n,every} boss spawns reinforcements
+     conduits   : overclock tiles (towers built here get buffed)
+   ============================================================ */
+const UNIVERSE={
+ cyb:{sig:SIG_INDEX, empDeath:0.5, empDur:0.9, empRange:74, bossAdds:{n:2,every:4.6}, conduits:[[5,5],[10,4],[14,3]], ocRate:0.6, ocRange:1.18},
+};
+function uni(){return UNIVERSE[G.map]||{};}
+function hasSig(){return uni().sig!=null;}
+function shopIndices(){const base=[0,1,2,3,4,5];if(hasSig())base.push(uni().sig);return base;}
+function isConduit(c,r){const cs=uni().conduits;return cs&&cs.some(p=>p[0]===c&&p[1]===r);}
+function towerIconKey(type){const T=TOWERS[type];return T.icon||(theme().id+'_'+T.key);}
+function twP(type){const tt=theme().towers[type];return(tt&&tt.p)||TOWERS[type].pc||'#9fd4ff';}
+function twN(type){const tt=theme().towers[type];return(tt&&tt.n)||TOWERS[type].name||TOWERS[type].key;}
 
 function towerStat(t,lvlOverride){
  const T=TOWERS[t.type],L=lvlOverride||t.level,b=T.base;
@@ -507,10 +530,12 @@ function towerStat(t,lvlOverride){
   case 'sniper':s.pierce=true;s.crit=Math.min(0.75,0.15+0.045*(L-1));s.critMult=2.6;break;
   case 'poison':s.trueDmg=true;s.dmg=b.dmg*Math.pow(1.25,L-1);s.poisonDps=b.dmg*0.6*Math.pow(1.42,L-1);s.poisonDur=3+0.2*(L-1);break;
   case 'tesla':s.chains=2+Math.floor((L-1)/2);break;
+  case 'hack':s.dmg=b.dmg*Math.pow(1.4,L-1);s.hackDur=4+0.45*(L-1);s.rate=b.rate*Math.pow(0.95,L-1);break;
  }
+ if(t.overclock){const u=uni();s.range*=u.ocRange||1.18;s.rate*=u.ocRate||0.6;}
  return s;
 }
-function towerDPS(t,L){const s=towerStat(t,L);let perHit=s.dmg*(1+s.crit*(s.critMult-1));let dps=perHit*s.multishot/s.rate;if(s.poisonDps)dps+=s.poisonDps;if(s.chains>1)dps*=1+(s.chains-1)*0.55;return dps;}
+function towerDPS(t,L){const s=towerStat(t,L);if(TOWERS[t.type].trait==='hack')return s.dmg/0.4*(s.hackDur/s.rate);let perHit=s.dmg*(1+s.crit*(s.critMult-1));let dps=perHit*s.multishot/s.rate;if(s.poisonDps)dps+=s.poisonDps;if(s.chains>1)dps*=1+(s.chains-1)*0.55;return dps;}
 function upgradeCost(t){return Math.round(TOWERS[t.type].cost*0.7*t.level*Math.pow(1.19,t.level-1));}
 function totalInvested(t){let c=TOWERS[t.type].cost;for(let l=1;l<t.level;l++)c+=Math.round(TOWERS[t.type].cost*0.7*l*Math.pow(1.19,l-1));return c;}
 
@@ -607,6 +632,7 @@ function makeEnemy(kindKey,opts){
   reward:Math.max(1,Math.round(BASERW*k.rw*Wv.rw)),dmg:k.dmg,size:k.size*(opts.sizeMul||1),
   armor:(k.armor||0)*(1+0.07*G.wave),wp:0,x:PATH[0].x,y:PATH[0].y,traveled:0,
   slowUntil:0,slowF:1,stunUntil:0,dots:[],isBoss:kindKey==='boss',
+  hacked:false,hackUntil:0,atkCd:0,addCd:2.5,
   shield:0,shieldMax:0,shieldRegenAt:0,heal:!!k.heal,healCd:0,split:!!k.split&&!opts.isChild,isChild:!!opts.isChild};
  if(k.shield){e.shieldMax=maxhp*k.shield;e.shield=e.shieldMax;}
  if(opts.x!=null){e.x=opts.x;e.y=opts.y;e.wp=opts.wp;e.traveled=opts.traveled;}
@@ -652,6 +678,16 @@ function update(dt){
 
  for(let i=G.enemies.length-1;i>=0;i--){
   const e=G.enemies[i];
+  // hacked turncoat: fights other enemies, then expires
+  if(e.hacked){
+   if(G.time>e.hackUntil){burst(e.x,e.y,'#3cffd0',10);ring(e.x,e.y,24,'#3cffd0');G.enemies.splice(i,1);continue;}
+   let tgt=null,td=130;for(const o of G.enemies){if(o===e||o.hacked)continue;const d=dist(e.x,e.y,o.x,o.y);if(d<td){td=d;tgt=o;}}
+   if(tgt){const dx=tgt.x-e.x,dy=tgt.y-e.y,d=Math.hypot(dx,dy)||1;if(Math.abs(dx)>1)e.fx=dx>0?1:-1;e.x+=dx/d*e.baseSpeed*0.9*dt;e.y+=dy/d*e.baseSpeed*0.9*dt;e.atkCd-=dt;if(d<32&&e.atkCd<=0){e.atkCd=0.4;damage(tgt,e.hackDmg||16,{owner:e.hackOwner,trueDmg:true});G.bolts.push({pts:[{x:e.x,y:e.y},{x:tgt.x,y:tgt.y}],life:0.1,color:'#3cffd0'});}}
+   else{e.x-=e.baseSpeed*0.5*dt;} // no target: drift back toward spawn
+   continue;
+  }
+  // boss reinforcements
+  if(e.isBoss&&uni().bossAdds){e.addCd-=dt;if(e.addCd<=0&&G.enemies.length<40){e.addCd=uni().bossAdds.every;for(let a=0;a<uni().bossAdds.n;a++){const ad=makeEnemy('swarm',{isChild:true,hpMul:0.6,x:e.x,y:e.y,wp:e.wp,traveled:e.traveled});G.enemies.push(ad);}burst(e.x,e.y,e.color,6);}}
   if(e.dots.length){for(let d=e.dots.length-1;d>=0;d--){const dot=e.dots[d];dot.rem-=dt;e.hp-=dot.dps*dt;if(dot.rem<=0)e.dots.splice(d,1);}if(e.hp<=0){killEnemy(e,e.dots[0]&&e.dots[0].owner);continue;}}
   if(e.shieldMax&&e.shield<e.shieldMax&&G.time>e.shieldRegenAt)e.shield=Math.min(e.shieldMax,e.shield+e.shieldMax*0.25*dt);
   if(e.heal){e.healCd-=dt;if(e.healCd<=0){e.healCd=0.5;for(const o of G.enemies){if(o!==e&&dist(e.x,e.y,o.x,o.y)<100&&o.hp<o.maxhp)o.hp=Math.min(o.maxhp,o.hp+o.maxhp*0.03);}burst(e.x,e.y,'#7fff9f',2);}}
@@ -668,13 +704,16 @@ function update(dt){
 
  for(const t of G.towers){
   t.cool-=dt;if(t.flash>0)t.flash-=dt;
+  if(G.time<(t.stunUntil||0)){t.cool=Math.max(t.cool,0.1);continue;} // EMP'd
   if(t.cool>0)continue;
   const s=towerStat(t),T=TOWERS[t.type];
-  const targets=pickTargets(t,s,Math.max(1,s.multishot));
+  const pmode=T.trait==='hack'?'strong':null;
+  const targets=pickTargets(t,s,Math.max(1,s.multishot),pmode);
   if(targets.length){
    const rallyMul=G.rallyUntil>G.time?0.58:1;
    t.cool=s.rate*rallyMul;t.angle=Math.atan2(targets[0].y-t.y,targets[0].x-t.x);t.flash=0.07;
-   if(T.trait==='tesla')fireTesla(t,s,targets[0]);
+   if(T.trait==='hack')hackTarget(t,s,targets[0]);
+   else if(T.trait==='tesla')fireTesla(t,s,targets[0]);
    else for(const tg of targets)spawnProj(t,s,tg);
    sShoot();
   } else t.cool=0;
@@ -696,6 +735,9 @@ function update(dt){
  for(let i=G.rings.length-1;i>=0;i--){const r=G.rings[i];r.life-=dt;r.r=r.max*(1-r.life/r.t);if(r.life<=0)G.rings.splice(i,1);}
  updateAmb(dt);
 
+ if(G.waveActive&&!G.spawnQueue.length&&!G.enemies.some(e=>!e.hacked)){
+  for(let i=G.enemies.length-1;i>=0;i--)if(G.enemies[i].hacked)G.enemies.splice(i,1);
+ }
  if(G.waveActive&&!G.spawnQueue.length&&!G.enemies.length){
   G.waveActive=false;
   const bonus=24+G.wave*6,interest=Math.min(80,Math.floor(G.gold*0.05));
@@ -706,9 +748,9 @@ function update(dt){
  refreshHUD();
 }
 
-function pickTargets(t,s,n){
- const inR=[];for(const e of G.enemies){if(dist(t.x,t.y,e.x,e.y)<=s.range)inR.push(e);}
- const m=t.mode||'first';
+function pickTargets(t,s,n,force){
+ const inR=[];for(const e of G.enemies){if(e.hacked)continue;if(dist(t.x,t.y,e.x,e.y)<=s.range)inR.push(e);}
+ const m=force||t.mode||'first';
  inR.sort((a,b)=>m==='first'?b.traveled-a.traveled:m==='last'?a.traveled-b.traveled:m==='strong'?b.hp-a.hp:dist(t.x,t.y,a.x,a.y)-dist(t.x,t.y,b.x,b.y));
  return inR.slice(0,n);
 }
@@ -727,7 +769,7 @@ function hitOne(e,p){
 }
 function aoe(x,y,r,p){
  burst(x,y,p.color,14);ring(x,y,r,p.color);G.shake=Math.min(10,4);sBoom();
- for(const e of G.enemies.slice()){if(dist(x,y,e.x,e.y)<=r){damage(e,p.dmg,{pierce:p.pierce,trueDmg:p.trueDmg,owner:p.owner});if(G.enemies.indexOf(e)!==-1)applyEffects(e,p);}}
+ for(const e of G.enemies.slice()){if(e.hacked)continue;if(dist(x,y,e.x,e.y)<=r){damage(e,p.dmg,{pierce:p.pierce,trueDmg:p.trueDmg,owner:p.owner});if(G.enemies.indexOf(e)!==-1)applyEffects(e,p);}}
 }
 function fireTesla(t,s,first){
  const hit=[],pts=[{x:t.x,y:t.y-6}];let cur=first,dmg=s.dmg;sZap();
@@ -735,10 +777,17 @@ function fireTesla(t,s,first){
   if(!cur||G.enemies.indexOf(cur)===-1)break;
   hit.push(cur);pts.push({x:cur.x,y:cur.y});
   damage(cur,dmg,{owner:t});dmg*=0.78;
-  let nxt=null,nd=170;for(const e of G.enemies){if(hit.includes(e))continue;const d=dist(cur.x,cur.y,e.x,e.y);if(d<nd){nd=d;nxt=e;}}
+  let nxt=null,nd=170;for(const e of G.enemies){if(e.hacked||hit.includes(e))continue;const d=dist(cur.x,cur.y,e.x,e.y);if(d<nd){nd=d;nxt=e;}}
   cur=nxt;
  }
- G.bolts.push({pts,life:0.18,color:theme().towers[t.type].p});
+ G.bolts.push({pts,life:0.18,color:twP(t.type)});
+}
+function hackTarget(t,s,e){
+ if(!e||e.isBoss||e.hacked)return; // bosses can't be turned
+ e.hacked=true;e.hackUntil=G.time+s.hackDur;e.hackDmg=s.dmg;e.hackOwner=t;e.atkCd=0.2;
+ e.slowUntil=0;e.stunUntil=0;e.dots=[];
+ G.bolts.push({pts:[{x:t.x,y:t.y-6},{x:e.x,y:e.y}],life:0.18,color:'#3cffd0'});
+ burst(e.x,e.y,'#3cffd0',10);ring(e.x,e.y,20,'#3cffd0');sZap();
 }
 function damage(e,dmg,o){
  o=o||{};let d=dmg;if(o.crit)d*=o.critMult||2;
@@ -748,10 +797,17 @@ function damage(e,dmg,o){
 }
 function killEnemy(e,owner){
  const idx=G.enemies.indexOf(e);if(idx<0)return;G.enemies.splice(idx,1);
+ if(e.hacked){burst(e.x,e.y,'#3cffd0',8);if(owner&&owner.kills!=null)owner.kills++;G.kills++;return;} // turncoat expired/destroyed
  G.gold+=e.reward;G.score+=e.reward;G.kills++;if(owner)owner.kills++;
  addFloat(e.x,e.y,'+'+e.reward,'#ffcf4d',14);burst(e.x,e.y,e.color,e.isBoss?34:10);
  if(e.isBoss)ring(e.x,e.y,90,e.color);
  if(e.split)spawnSplit(e);
+ // EMP: a dying heavy cyber unit fries the nearest tower briefly
+ const u=uni();
+ if(u.empDeath&&(e.isBoss||e.kind==='tank'||e.kind==='armored')&&Math.random()<(e.isBoss?1:u.empDeath)){
+  let nt=null,nd=u.empRange||74;for(const t of G.towers){if(G.time<(t.stunUntil||0))continue;const d=dist(e.x,e.y,t.x,t.y);if(d<nd){nd=d;nt=t;}}
+  if(nt){nt.stunUntil=G.time+(e.isBoss?(u.empDur*2.2):u.empDur);ring(nt.x,nt.y,30,'#7fe0ff');burst(nt.x,nt.y,'#7fe0ff',8);for(let z=0;z<3;z++)G.bolts.push({pts:[{x:e.x,y:e.y},{x:nt.x,y:nt.y}],life:0.16,color:'#7fe0ff'});}
+ }
  if(e.isBoss){G.shake=14;sBoom();}else sKill();sCoin();
 }
 
@@ -864,7 +920,6 @@ function drawAmb(){
 /* ============================================================
    RENDER
    ============================================================ */
-function towerIconKey(type){return theme().id+'_'+TOWERS[type].key;}
 function skinIconKey(skin){return theme().id+'_'+skin;}
 
 function drawPlatform(x,y,tier,accent){
@@ -879,7 +934,7 @@ function drawPlatform(x,y,tier,accent){
  ctx.beginPath();ctx.arc(x,y+2,15.5,0,TAU);ctx.stroke();ctx.shadowBlur=0;
 }
 function drawTower(t){
- const th=theme(),tw=th.towers[t.type],tier=tierOf(t.level);
+ const th=theme(),tw={n:twN(t.type),p:twP(t.type)},tier=tierOf(t.level);
  drawPlatform(t.x,t.y,tier,tw.p);
  const size=34+tier*2.6;
  const st={c1:shade(tw.p,0.5),c2:shade(tw.p,-0.18),outline:'rgba(6,8,16,0.78)',glow:tier>=2?rgba(tw.p,0.85):null};
@@ -891,6 +946,14 @@ function drawTower(t){
   const fx=t.x+Math.cos(t.angle)*19,fy=t.y-5+Math.sin(t.angle)*19;
   const fg=ctx.createRadialGradient(fx,fy,0,fx,fy,11);fg.addColorStop(0,'rgba(255,255,220,0.9)');fg.addColorStop(0.4,rgba(tw.p,0.55));fg.addColorStop(1,'rgba(0,0,0,0)');
   ctx.fillStyle=fg;ctx.beginPath();ctx.arc(fx,fy,11,0,TAU);ctx.fill();
+ }
+ // overclock aura
+ if(t.overclock){ctx.strokeStyle='rgba(57,230,255,'+(0.4+0.3*Math.sin(G.time*4))+')';ctx.lineWidth=1.4;ctx.beginPath();ctx.arc(t.x,t.y+2,19,0,TAU);ctx.stroke();}
+ // EMP'd: sparking, can't fire
+ if(G.time<(t.stunUntil||0)){
+  ctx.globalAlpha=0.7+0.3*Math.sin(G.time*30);ctx.strokeStyle='#7fe0ff';ctx.lineWidth=2;
+  for(let k=0;k<3;k++){const a=G.time*8+k*2.1;ctx.beginPath();ctx.moveTo(t.x,t.y-4);ctx.lineTo(t.x+Math.cos(a)*16,t.y-4+Math.sin(a)*16);ctx.stroke();}
+  ctx.globalAlpha=1;
  }
  for(let i=0;i<t.level;i++){ctx.fillStyle=TIER_COLORS[tierOf(i+1)];ctx.fillRect(t.x-15+i*3.1,t.y+13.5,2.2,3.6);}
  // upgrade-available chevron
@@ -927,9 +990,13 @@ function drawEnemy(e){
   ctx.globalAlpha=0.55+0.3*Math.sin(G.time*4);ctx.strokeStyle=e.color;ctx.lineWidth=2;
   ctx.beginPath();ctx.arc(e.x,ey,s*0.74+Math.sin(G.time*4)*2,0,TAU);ctx.stroke();ctx.globalAlpha=1;
  }
- // sprite
- const st={c1:shade(e.color,0.5),c2:shade(e.color,-0.22),outline:'rgba(5,7,14,0.8)',glow:e.isBoss?rgba(e.color,0.7):null};
+ // sprite (hacked turncoats glow cyan and fight for you)
+ const hk=e.hacked;
+ const st=hk?{c1:'#bdfff2',c2:'#1f9c86',outline:'rgba(5,30,28,0.85)',glow:'rgba(57,230,255,0.9)'}
+            :{c1:shade(e.color,0.5),c2:shade(e.color,-0.22),outline:'rgba(5,7,14,0.8)',glow:e.isBoss?rgba(e.color,0.7):null};
+ if(hk){ctx.strokeStyle='rgba(57,230,255,'+(0.5+0.4*Math.sin(G.time*6+e.seed))+')';ctx.lineWidth=2;ctx.beginPath();ctx.arc(e.x,ey,s*0.7,0,TAU);ctx.stroke();}
  drawSprite(skinIconKey(e.skin),e.x,ey,s+8,st,e.fx<0);
+ if(hk){ctx.fillStyle='#3cffd0';ctx.font='700 9px -apple-system,Segoe UI,sans-serif';ctx.textAlign='center';ctx.fillText('HACKED',e.x,ey-s*0.7-4);}
  // status fx
  if(G.time<e.stunUntil){ctx.strokeStyle='rgba(255,232,130,0.95)';ctx.lineWidth=2;ctx.beginPath();ctx.arc(e.x,ey,s*0.68,G.time*6,G.time*6+4.4);ctx.stroke();}
  else if(e.slowF<1&&G.time<e.slowUntil){ctx.strokeStyle='rgba(130,210,255,0.85)';ctx.lineWidth=2;ctx.beginPath();ctx.arc(e.x,ey,s*0.66,-G.time*4,-G.time*4+4.4);ctx.stroke();}
@@ -964,6 +1031,15 @@ function render(){
  if(G.shake>0)ctx.translate((Math.random()-0.5)*G.shake,(Math.random()-0.5)*G.shake);
  ctx.drawImage(BGC,0,0,W,H);
 
+ // overclock conduit tiles (universe gimmick)
+ const ocs=uni().conduits;
+ if(ocs){for(const[c,r]of ocs){const x=c*TILE+TILE/2,y=r*TILE+TILE/2,pulse=0.5+0.5*Math.sin(G.time*3+c+r);
+  ctx.save();ctx.strokeStyle='rgba(57,230,255,'+(0.5+pulse*0.4)+')';ctx.lineWidth=2;ctx.shadowColor='#3cffd0';ctx.shadowBlur=10+pulse*8;
+  rr(ctx,c*TILE+7,r*TILE+7,TILE-14,TILE-14,7);ctx.stroke();
+  ctx.shadowBlur=0;ctx.fillStyle='rgba(57,230,255,'+(0.06+pulse*0.06)+')';rr(ctx,c*TILE+7,r*TILE+7,TILE-14,TILE-14,7);ctx.fill();
+  ctx.fillStyle='rgba(57,230,255,0.8)';ctx.font='700 9px -apple-system,Segoe UI,sans-serif';ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText('OC',x,y+TILE*0.28);
+  ctx.restore();}}
+
  // animated path flow
  ctx.save();ctx.lineCap='round';ctx.setLineDash([10,26]);ctx.lineDashOffset=-G.time*46;
  ctx.strokeStyle=rgba(theme().accent,0.16);ctx.lineWidth=4;
@@ -986,8 +1062,8 @@ function render(){
   ctx.setLineDash([6,6]);ctx.beginPath();ctx.arc(cc.x,cc.y,TOWERS[G.selectedShop].base.range,0,TAU);ctx.stroke();ctx.setLineDash([]);
   rr(ctx,c*TILE+4,r*TILE+4,TILE-8,TILE-8,8);ctx.stroke();
   ctx.globalAlpha=0.85;
-  const tw=theme().towers[G.selectedShop];
-  drawSprite(towerIconKey(G.selectedShop),cc.x,cc.y-4,34,{c1:shade(tw.p,0.5),c2:shade(tw.p,-0.18),outline:'rgba(6,8,16,0.7)'});
+  const sp=twP(G.selectedShop);
+  drawSprite(towerIconKey(G.selectedShop),cc.x,cc.y-4,34,{c1:shade(sp,0.5),c2:shade(sp,-0.18),outline:'rgba(6,8,16,0.7)'});
   ctx.globalAlpha=1;
  }
  // aiming reticle
@@ -1073,15 +1149,15 @@ const coinSVG=sz=>svgIcon('ui_coin','#ffcf4d',sz||12);
 const PAUSE_SVG='<svg class="gi" viewBox="0 0 512 512" style="width:13px;height:13px"><rect x="128" y="92" width="88" height="328" rx="28" fill="#fff"/><rect x="296" y="92" width="88" height="328" rx="28" fill="#fff"/></svg>';
 function refreshHUD(){
  $('gold').textContent=Math.floor(G.gold);$('lives').textContent=G.lives;$('wave').textContent=G.wave;$('score').textContent=G.score;$('kills').textContent=G.kills;
- document.querySelectorAll('.shopBtn').forEach((b,i)=>{b.classList.toggle('cant',G.gold<TOWERS[i].cost);b.classList.toggle('sel',G.selectedShop===i);});
+ const idxs=shopIndices();document.querySelectorAll('.shopBtn').forEach((b,j)=>{const i=idxs[j];b.classList.toggle('cant',G.gold<TOWERS[i].cost);b.classList.toggle('sel',G.selectedShop===i);});
  refreshAbilities();
 }
 function buildShop(){
- const th=theme(),shop=$('shop');shop.innerHTML='';
- TOWERS.forEach((tw,i)=>{
-  const p=th.towers[i].p;
-  const b=document.createElement('button');b.className='shopBtn';
-  b.innerHTML=`<div class="top"><span class="chip" style="background:${rgba(p,0.13)};border:1px solid ${rgba(p,0.35)}">${svgIcon(th.id+'_'+tw.key,p,24,'filter:drop-shadow(0 0 4px '+rgba(p,0.7)+')')}</span><span class="nm">${th.towers[i].n}</span></div><div class="ds">${tw.desc}</div><div class="cost">${coinSVG()} ${tw.cost}</div>`;
+ const shop=$('shop');shop.innerHTML='';
+ shopIndices().forEach(i=>{
+  const tw=TOWERS[i],p=twP(i),sig=hasSig()&&i===uni().sig;
+  const b=document.createElement('button');b.className='shopBtn'+(sig?' sigBtn':'');
+  b.innerHTML=`<div class="top"><span class="chip" style="background:${rgba(p,0.13)};border:1px solid ${rgba(p,0.35)}">${svgIcon(towerIconKey(i),p,24,'filter:drop-shadow(0 0 4px '+rgba(p,0.7)+')')}</span><span class="nm">${twN(i)}${sig?' <em>★</em>':''}</span></div><div class="ds">${tw.desc}</div><div class="cost">${coinSVG()} ${tw.cost}</div>`;
   b.onclick=()=>{G.selectedShop=G.selectedShop===i?-1:i;G.selectedTower=null;G.aiming=null;G.infoAbility=null;if(G.selectedShop<0)clearPending();renderSel();refreshHUD();};
   shop.appendChild(b);
  });
@@ -1106,14 +1182,14 @@ function renderSel(){
  if(!G.selectedTower){card.style.display='none';return;}
  const t=G.selectedTower,s=towerStat(t),th=theme(),maxed=t.level>=MAX_LVL;
  const ns=maxed?s:towerStat(t,t.level+1),uc=upgradeCost(t),refund=Math.round(totalInvested(t)*0.6),tier=tierOf(t.level);
- const p=th.towers[t.type].p;
+ const p=twP(t.type);
  card.style.display='block';
  let pips='';for(let i=0;i<MAX_LVL;i++)pips+=`<div class="pip ${i<t.level?'on':''}"></div>`;
  const up=(a,b)=>!maxed&&b>a+0.01?`<span class="up">▲${fmt(b-a)}</span>`:'';
  const mode=t.mode||'first';
  card.innerHTML=`
   <div class="head"><span class="chip" style="width:44px;height:44px;flex-basis:44px;background:${rgba(p,0.13)};border:1px solid ${rgba(p,0.4)}">${svgIcon(th.id+'_'+TOWERS[t.type].key,p,30,'filter:drop-shadow(0 0 5px '+rgba(p,0.8)+')')}</span>
-   <div><div class="tn">${th.towers[t.type].n}</div><div class="tier" style="color:${TIER_COLORS[tier]}">${TIER_NAMES[t.level-1]} · Lv ${t.level}/${MAX_LVL}</div></div></div>
+   <div><div class="tn">${twN(t.type)}</div><div class="tier" style="color:${TIER_COLORS[tier]}">${TIER_NAMES[t.level-1]} · Lv ${t.level}/${MAX_LVL}</div></div></div>
   <div class="lvlbar">${pips}</div>
   <div class="stats">
    <div class="row"><span>DPS</span><b>${fmt(towerDPS(t))} ${up(towerDPS(t),towerDPS(t,t.level+1))}</b></div>
@@ -1127,6 +1203,8 @@ function renderSel(){
    ${s.stun?`<div class="row"><span>Stun</span><b>${Math.round(s.stun*100)}%</b></div>`:''}
    ${s.poisonDps?`<div class="row"><span>Poison/s</span><b>${fmt(s.poisonDps)}</b></div>`:''}
    ${s.chains?`<div class="row"><span>Chains</span><b>${s.chains}</b></div>`:''}
+   ${s.hackDur?`<div class="row"><span>Turncoat</span><b>${s.hackDur.toFixed(1)}s</b></div>`:''}
+   ${t.overclock?`<div class="row"><span>Overclock</span><b style="color:#3cffd0">+rate/range</b></div>`:''}
    ${s.pierce?`<div class="row"><span>Armor</span><b style="color:#46e08a">Pierce</b></div>`:''}
    <div class="row"><span>Dmg dealt</span><b>${fmt(t.dmgDealt)}</b></div>
    <div class="row"><span>Kills</span><b>${t.kills}</b></div>
@@ -1143,7 +1221,7 @@ function renderSel(){
 }
 function tryUpgrade(t){
  if(t.level>=MAX_LVL){toast('Already max level');return false;}
- const uc=upgradeCost(t),p=theme().towers[t.type].p;
+ const uc=upgradeCost(t),p=twP(t.type);
  if(G.gold<uc){toast('Upgrade needs '+uc+' gold');return false;}
  G.gold-=uc;t.level++;
  addFloat(t.x,t.y,TIER_NAMES[t.level-1].toUpperCase()+' '+t.level,'#ffcf4d',15);
@@ -1268,8 +1346,9 @@ function placeTower(c,r){
  if(!buildable(c,r)||G.gold<TOWERS[G.selectedShop].cost){toast(G.gold<TOWERS[G.selectedShop].cost?'Not enough gold':"Can't build there");return false;}
  const cc=cellCenter(c,r);
  G.gold-=TOWERS[G.selectedShop].cost;
- G.towers.push({type:G.selectedShop,c,r,x:cc.x,y:cc.y,level:1,cool:0,angle:-Math.PI/2,mode:'first',dmgDealt:0,kills:0,flash:0});
- burst(cc.x,cc.y,theme().towers[G.selectedShop].p,10);ring(cc.x,cc.y,30,theme().towers[G.selectedShop].p);sCoin();
+ G.towers.push({type:G.selectedShop,c,r,x:cc.x,y:cc.y,level:1,cool:0,angle:-Math.PI/2,mode:'first',dmgDealt:0,kills:0,flash:0,overclock:isConduit(c,r),stunUntil:0});
+ if(isConduit(c,r)){ring(cc.x,cc.y,34,'#3cffd0');addFloat(cc.x,cc.y-18,'OVERCLOCK','#3cffd0',13);}
+ burst(cc.x,cc.y,twP(G.selectedShop),10);ring(cc.x,cc.y,30,twP(G.selectedShop),10);sCoin();
  if(G.gold<TOWERS[G.selectedShop].cost){G.selectedShop=-1;renderSel();}
  refreshHUD();saveGame();return true;
 }
@@ -1495,7 +1574,7 @@ function resumeGame(s){
  G.map=MAPS[s.map]?s.map:THEMES[G.theme].id;
  buildMap(G.map);
  G.gold=s.gold||0;G.lives=s.lives||1;G.wave=s.wave||0;G.score=s.score||0;G.kills=s.kills||0;G.speed=s.speed||1;G.muted=!!s.muted;G.running=true;
- G.towers=(s.towers||[]).filter(o=>buildableCellFree(o.c,o.r)).map(o=>{const cc=cellCenter(o.c,o.r);return{type:clamp(o.t||0,0,TOWERS.length-1),c:o.c,r:o.r,x:cc.x,y:cc.y,level:clamp(o.l||1,1,MAX_LVL),cool:0,angle:-Math.PI/2,mode:o.m||'first',dmgDealt:o.dd||0,kills:o.k||0,flash:0};});
+ G.towers=(s.towers||[]).filter(o=>buildableCellFree(o.c,o.r)).map(o=>{const cc=cellCenter(o.c,o.r);return{type:clamp(o.t||0,0,TOWERS.length-1),c:o.c,r:o.r,x:cc.x,y:cc.y,level:clamp(o.l||1,1,MAX_LVL),cool:0,angle:-Math.PI/2,mode:o.m||'first',dmgDealt:o.dd||0,kills:o.k||0,flash:0,overclock:isConduit(o.c,o.r),stunUntil:0};});
  if(s.cds)G.abilReady={strike:s.cds.strike||0,freeze:s.cds.freeze||0,rally:s.cds.rally||0};
  if(s.abl)G.abilLvl={strike:clamp(s.abl.strike||1,1,ABIL_MAX),freeze:clamp(s.abl.freeze||1,1,ABIL_MAX),rally:clamp(s.abl.rally||1,1,ABIL_MAX)};
  menuTheme=G.theme;$('themeSel').value=G.theme;$('muteBtn').classList.toggle('on',!G.muted);
@@ -1524,7 +1603,7 @@ window.addEventListener('keydown',e=>{
  if(e.key==='Escape'){G.selectedShop=-1;G.selectedTower=null;G.aiming=null;G.infoAbility=null;clearPending();renderSel();refreshHUD();}
  if(e.key===' '){e.preventDefault();if(!G.waveActive){if(G.paused)setPaused(false);startWave();}}
  if(e.key.toLowerCase()==='p')setPaused(!G.paused);
- if(e.key>='1'&&e.key<='6'){const i=+e.key-1;G.selectedShop=G.selectedShop===i?-1:i;G.selectedTower=null;G.aiming=null;clearPending();renderSel();refreshHUD();}
+ if(e.key>='1'&&e.key<='7'){const idxs=shopIndices(),i=idxs[+e.key-1];if(i!=null){G.selectedShop=G.selectedShop===i?-1:i;G.selectedTower=null;G.aiming=null;clearPending();renderSel();refreshHUD();}}
  const ab={q:0,w:1,e:2};if(e.key.toLowerCase() in ab)useAbility(ab[e.key.toLowerCase()]);
 });
 

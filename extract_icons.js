@@ -112,6 +112,7 @@ const M = {
   cyb_sniper: ['sbed/target-laser','delapouite/delivery-drone'],
   cyb_poison: ['lorc/virus','sbed/biohazard','lorc/poison-gas'],
   cyb_tesla:  ['sbed/tesla','lorc/tesla-coil'],
+  cyb_hack:   ['delapouite/spider-bot','delapouite/cyber-eye'],
   cyb_grunt:  ['delapouite/robot-helmet','lorc/vintage-robot'],
   cyb_runner: ['delapouite/mono-wheel-robot','delapouite/tracked-robot'],
   cyb_tank:   ['delapouite/battle-mech','delapouite/mecha-head'],
